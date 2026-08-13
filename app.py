@@ -446,8 +446,85 @@ if not todos_produtos:
     st.stop()
 
 df = pd.DataFrame(todos_produtos)
+
+st.subheader("🔢 Unidades reais por produto")
+
+st.caption(
+    "A quantidade do XML às vezes representa embalagens (caixa, fardo, "
+    "pacote), não a unidade real vendida. Informe abaixo quantas "
+    "unidades reais existem dentro de cada quantidade do XML para o "
+    "custo e o preço por unidade saírem corretos. Deixe 1 se a "
+    "quantidade do XML já é a unidade real."
+)
+
+df["ID_temp"] = range(len(df))
+
+if "unidades_por_embalagem" not in st.session_state:
+    st.session_state["unidades_por_embalagem"] = {}
+
+df_editor_base = df[[
+    "ID_temp",
+    "Código",
+    "Produto",
+    "Unidade",
+    "Quantidade",
+    "Arquivo XML",
+]].copy()
+
+df_editor_base["Unidades por embalagem"] = df_editor_base["ID_temp"].map(
+    lambda id_temp: st.session_state["unidades_por_embalagem"].get(
+        id_temp, 1.0
+    )
+)
+
+df_editado = st.data_editor(
+    df_editor_base,
+    use_container_width=True,
+    hide_index=True,
+    disabled=[
+        "ID_temp",
+        "Código",
+        "Produto",
+        "Unidade",
+        "Quantidade",
+        "Arquivo XML",
+    ],
+    column_config={
+        "ID_temp": None,
+        "Unidades por embalagem": st.column_config.NumberColumn(
+            "Unidades reais por embalagem",
+            help=(
+                "Ex.: se a Quantidade do XML é 1 (uma caixa) e a caixa "
+                "tem 12 peças, coloque 12 aqui."
+            ),
+            min_value=0.01,
+            step=1.0,
+            format="%.2f",
+        ),
+    },
+    key="editor_unidades_por_embalagem",
+)
+
+for _, linha in df_editado.iterrows():
+    st.session_state["unidades_por_embalagem"][linha["ID_temp"]] = (
+        linha["Unidades por embalagem"]
+    )
+
+df["Unidades por embalagem"] = df["ID_temp"].map(
+    lambda id_temp: st.session_state["unidades_por_embalagem"].get(
+        id_temp, 1.0
+    )
+)
+
+df["Unidades por embalagem"] = df["Unidades por embalagem"].fillna(1.0)
+df.loc[df["Unidades por embalagem"] <= 0, "Unidades por embalagem"] = 1.0
+
+df["Quantidade real"] = (
+    df["Quantidade"] * df["Unidades por embalagem"]
+)
+
 df["Custo adicional"] = (
-    df["Quantidade"] * custo_adicional_unitario
+    df["Quantidade real"] * custo_adicional_unitario
 )
 
 df["Custo final"] = (
@@ -456,7 +533,7 @@ df["Custo final"] = (
 )
 
 df["Custo unitário final"] = (
-    df["Custo final"] / df["Quantidade"].replace(0, 1)
+    df["Custo final"] / df["Quantidade real"].replace(0, 1)
 )
 
 fator_markup = 1 + (markup / 100)
@@ -466,7 +543,7 @@ df["Preço de revenda unitário"] = (
 )
 
 df["Total de revenda"] = (
-    df["Quantidade"]
+    df["Quantidade real"]
     * df["Preço de revenda unitário"]
 )
 
@@ -476,8 +553,10 @@ df["Lucro unitário"] = (
 )
 
 df["Lucro total"] = (
-    df["Quantidade"] * df["Lucro unitário"]
+    df["Quantidade real"] * df["Lucro unitário"]
 )
+
+df = df.drop(columns=["ID_temp"])
 
 colunas_monetarias = [
     "Valor dos produtos",
@@ -550,6 +629,8 @@ colunas_tabela = [
     "Produto",
     "Unidade",
     "Quantidade",
+    "Unidades por embalagem",
+    "Quantidade real",
     "Valor dos produtos",
     "Frete",
     "Seguro",
@@ -573,6 +654,12 @@ st.dataframe(
     hide_index=True,
     column_config={
         "Quantidade": st.column_config.NumberColumn(
+            format="%.2f"
+        ),
+        "Unidades por embalagem": st.column_config.NumberColumn(
+            format="%.2f"
+        ),
+        "Quantidade real": st.column_config.NumberColumn(
             format="%.2f"
         ),
         "Valor dos produtos": st.column_config.NumberColumn(
@@ -620,7 +707,7 @@ tipo_grafico = st.selectbox(
     "Escolha o tipo de gráfico",
     [
         "Total de revenda",
-        "Quantidade",
+        "Quantidade real",
         "Lucro total",
         "Custo final",
     ]
@@ -630,7 +717,7 @@ agrupado = df.groupby(
     "Produto",
     as_index=False
 ).agg({
-    "Quantidade": "sum",
+    "Quantidade real": "sum",
     "Total de revenda": "sum",
     "Lucro total": "sum",
     "Custo final": "sum",
@@ -639,8 +726,8 @@ agrupado = df.groupby(
 if tipo_grafico == "Total de revenda":
     coluna_valor = "Total de revenda"
 
-elif tipo_grafico == "Quantidade":
-    coluna_valor = "Quantidade"
+elif tipo_grafico == "Quantidade real":
+    coluna_valor = "Quantidade real"
 
 elif tipo_grafico == "Lucro total":
     coluna_valor = "Lucro total"
@@ -662,6 +749,12 @@ fig.update_traces(
     textinfo="percent+label"
 )
 
+fig.update_layout(
+    height=700,
+    font=dict(size=16),
+    title_font_size=22,
+    legend=dict(font=dict(size=14)),
+)
 st.plotly_chart(
     fig,
     use_container_width=True
