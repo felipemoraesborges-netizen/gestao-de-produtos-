@@ -13,6 +13,115 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown(
+    """
+    <style>
+    /* Fonte e espaçamento geral */
+    html, body, [class*="css"] {
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    /* Título principal */
+    h1 {
+        color: #1B4F8C;
+        font-weight: 700;
+        border-bottom: 3px solid #1B4F8C;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.2rem;
+    }
+
+    /* Subtítulos de seção */
+    h2, h3 {
+        color: #1B4F8C;
+        font-weight: 600;
+        margin-top: 1.8rem;
+    }
+
+    /* Barra lateral */
+    section[data-testid="stSidebar"] {
+        background-color: #0E2A47;
+    }
+
+    section[data-testid="stSidebar"] * {
+        color: #F0F4F8 !important;
+    }
+
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #FFFFFF !important;
+        border-bottom: none;
+    }
+
+    section[data-testid="stSidebar"] .stCheckbox {
+        background-color: rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 2px 6px;
+        margin-bottom: 2px;
+    }
+
+    /* Cartões de métricas */
+    div[data-testid="stMetric"] {
+        background-color: #F0F4F8;
+        border: 1px solid #D6E0EA;
+        border-left: 5px solid #1B4F8C;
+        border-radius: 8px;
+        padding: 1rem 1.2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    div[data-testid="stMetricLabel"] {
+        color: #4A5A6A;
+        font-weight: 600;
+    }
+
+    div[data-testid="stMetricValue"] {
+        color: #1B4F8C;
+        font-weight: 700;
+    }
+
+    /* Botões */
+    .stButton button, .stDownloadButton button {
+        background-color: #1B4F8C;
+        color: white;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        padding: 0.5rem 1.2rem;
+    }
+
+    .stButton button:hover, .stDownloadButton button:hover {
+        background-color: #163F70;
+        color: white;
+    }
+
+    /* Alertas (sucesso, aviso, erro, info) */
+    div[data-testid="stAlert"] {
+        border-radius: 8px;
+    }
+
+    /* Tabelas e data editor */
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
+        border: 1px solid #D6E0EA;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    /* Divisor visual entre seções */
+    hr {
+        border-top: 1px solid #D6E0EA;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 def nome_tag(elemento):
     """
@@ -302,11 +411,15 @@ def ler_xml(arquivo, impostos_selecionados):
 
 
 st.title("📦 Gestão de Produtos")
-st.write(
+st.markdown(
+    "<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>"
     "Importe XMLs de NF-e, calcule custos e defina preços de revenda."
+    "</p>",
+    unsafe_allow_html=True,
 )
 
 st.sidebar.header("⚙️ Configurações")
+
 
 arquivos = st.sidebar.file_uploader(
     "1. Escolha os arquivos XML",
@@ -447,6 +560,7 @@ if not todos_produtos:
 
 df = pd.DataFrame(todos_produtos)
 
+st.divider()
 st.subheader("🔢 Unidades reais por produto")
 
 st.caption(
@@ -591,6 +705,7 @@ st.success(
     f"{len(df)} produto(s) processado(s) com sucesso."
 )
 
+st.divider()
 st.subheader("📊 Resumo financeiro")
 
 custo_total = df["Custo final"].sum()
@@ -646,6 +761,7 @@ colunas_tabela = [
     "Arquivo XML",
 ]
 
+st.divider()
 st.subheader("📋 Produtos processados")
 
 st.dataframe(
@@ -701,6 +817,7 @@ st.dataframe(
     }
 )
 
+st.divider()
 st.subheader("📈 Gráfico de análise")
 
 tipo_grafico = st.selectbox(
@@ -755,11 +872,13 @@ fig.update_layout(
     title_font_size=22,
     legend=dict(font=dict(size=14)),
 )
+
 st.plotly_chart(
     fig,
     use_container_width=True
 )
 
+st.divider()
 st.subheader("📤 Exportação")
 
 csv_data = df.to_csv(
