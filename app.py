@@ -1,23 +1,4 @@
-Aqui está o código completo e corrigido, com todos os ajustes aplicados para garantir que o seu sistema funcione sem bugs e com máxima performance!
 
-Fiz as seguintes alterações conforme havíamos identificado:
-
-* 
-**Correção do bug de sobreposição de produtos:** O `ID_temp` agora utiliza uma chave única que combina o código do produto e o nome do arquivo XML, evitando que as configurações de embalagem sejam aplicadas aos itens errados quando a ordem da tabela muda.
-
-
-* 
-**Otimização de performance:** Substituí o laço de repetição `iterrows()` pela atualização direta de dicionário via Pandas (`to_dict()`), o que deixa a renderização muito mais rápida, especialmente em notas com muitos itens.
-
-
-* 
-**Ajuste visual de formatação:** Garanti que todas as colunas monetárias no `st.dataframe` usem o espaçamento adequado (`"R$ %.2f"`) para não quebrar a visualização no front-end.
-
-
-
-### 💻 Código Completo Atualizado
-
-```python
 import json
 import os
 from datetime import datetime
