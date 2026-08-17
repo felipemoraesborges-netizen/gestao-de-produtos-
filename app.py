@@ -1175,5 +1175,3 @@ st.download_button(
     file_name="produtos_precificados.csv",
     mime="text/csv"
 )
-
-```
