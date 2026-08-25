@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+env/
+
+# Banco de dados local (não versionar dados pessoais)
+banco_notas.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.npm/
+
+# Vite build output (gerado automaticamente)
+# Manter o dist para deploy sem build step (opcional: remova se preferir buildar no servidor)
+# frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporários
+*.tmp
+*.bak

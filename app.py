@@ -1,4 +1,3 @@
-
 import os
 import sqlite3
 from datetime import datetime
@@ -9,12 +8,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+import auth
 
 DB_PATH = "banco_notas.db"
 PASTA_XMLS_PROCESSADOS = "xmls_processados"
 
+
 def inicializar_banco() -> None:
-    
+    """Inicializa as pastas, tabelas de notas e usuários."""
     os.makedirs(PASTA_XMLS_PROCESSADOS, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -29,22 +30,41 @@ def inicializar_banco() -> None:
             valor_total REAL,
             arquivo_original TEXT,
             arquivo_salvo TEXT,
-            data_importacao TEXT
+            data_importacao TEXT,
+            usuario_id INTEGER
         )
     """)
+    # Garante migração da coluna usuario_id caso a tabela já existisse antes
+    cursor.execute("PRAGMA table_info(historico_nfe)")
+    colunas = [col[1] for col in cursor.fetchall()]
+    if "usuario_id" not in colunas:
+        cursor.execute("ALTER TABLE historico_nfe ADD COLUMN usuario_id INTEGER")
+
     conn.commit()
     conn.close()
 
-def carregar_indice() -> Dict[str, Dict[str, Any]]:
+    # Garante a tabela de usuários
+    auth.inicializar_tabela_usuarios(DB_PATH)
+
+
+def carregar_indice(usuario_id: Optional[int] = None) -> Dict[str, Dict[str, Any]]:
     """Carrega o histórico do SQLite em formato de dicionário."""
     inicializar_banco()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM historico_nfe")
+    if usuario_id is not None:
+        cursor.execute("""
+            SELECT * FROM historico_nfe 
+            WHERE usuario_id = ? OR usuario_id IS NULL 
+            ORDER BY data_importacao DESC
+        """, (usuario_id,))
+    else:
+        cursor.execute("SELECT * FROM historico_nfe ORDER BY data_importacao DESC")
     linhas = cursor.fetchall()
     conn.close()
     return {linha["chave_acesso"]: dict(linha) for linha in linhas}
+
 
 def salvar_nota(dados: Dict[str, Any]) -> None:
     """Salva uma nova nota fiscal no banco de dados."""
@@ -53,14 +73,16 @@ def salvar_nota(dados: Dict[str, Any]) -> None:
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO historico_nfe 
-        (chave_acesso, numero, serie, data_emissao, fornecedor, cnpj_emit, valor_total, arquivo_original, arquivo_salvo, data_importacao)
-        VALUES (:chave_acesso, :numero, :serie, :data_emissao, :fornecedor, :cnpj_emit, :valor_total, :arquivo_original, :arquivo_salvo, :data_importacao)
+        (chave_acesso, numero, serie, data_emissao, fornecedor, cnpj_emit, valor_total, arquivo_original, arquivo_salvo, data_importacao, usuario_id)
+        VALUES (:chave_acesso, :numero, :serie, :data_emissao, :fornecedor, :cnpj_emit, :valor_total, :arquivo_original, :arquivo_salvo, :data_importacao, :usuario_id)
     """, dados)
     conn.commit()
     conn.close()
 
+
 def nome_tag(elemento: ET.Element) -> str:
     return elemento.tag.split("}")[-1]
+
 
 def encontrar_elemento(elemento_pai: Optional[ET.Element], nome: str) -> Optional[ET.Element]:
     if elemento_pai is None:
@@ -70,6 +92,7 @@ def encontrar_elemento(elemento_pai: Optional[ET.Element], nome: str) -> Optiona
             return elemento
     return None
 
+
 def encontrar_filho(elemento_pai: Optional[ET.Element], nome: str) -> Optional[ET.Element]:
     if elemento_pai is None:
         return None
@@ -78,11 +101,13 @@ def encontrar_filho(elemento_pai: Optional[ET.Element], nome: str) -> Optional[E
             return filho
     return None
 
+
 def obter_texto(elemento_pai: Optional[ET.Element], nome: str, padrao: str = "") -> str:
     elemento = encontrar_elemento(elemento_pai, nome)
     if elemento is not None and elemento.text:
         return elemento.text.strip()
     return padrao
+
 
 def converter_decimal(valor: Any, padrao: Decimal = Decimal("0")) -> Decimal:
     if valor is None:
@@ -95,18 +120,22 @@ def converter_decimal(valor: Any, padrao: Decimal = Decimal("0")) -> Decimal:
     except InvalidOperation:
         return padrao
 
+
 def valor_tag(elemento_pai: Optional[ET.Element], nome: str) -> Decimal:
     elemento = encontrar_elemento(elemento_pai, nome)
     if elemento is not None and elemento.text:
         return converter_decimal(elemento.text)
     return Decimal("0")
 
+
 def ler_totais_nfe(root: ET.Element) -> Dict[str, Decimal]:
     total_node = encontrar_elemento(root, "ICMSTot")
     if total_node is None:
         return {
-            "frete": Decimal("0"), "seguro": Decimal("0"),
-            "desconto": Decimal("0"), "outras_despesas": Decimal("0"),
+            "frete": Decimal("0"),
+            "seguro": Decimal("0"),
+            "desconto": Decimal("0"),
+            "outras_despesas": Decimal("0"),
         }
     return {
         "frete": valor_tag(total_node, "vFrete"),
@@ -114,6 +143,7 @@ def ler_totais_nfe(root: ET.Element) -> Dict[str, Decimal]:
         "desconto": valor_tag(total_node, "vDesc"),
         "outras_despesas": valor_tag(total_node, "vOutro"),
     }
+
 
 def localizar_produtos(root: ET.Element, impostos_selecionados: List[str]) -> List[Dict[str, Any]]:
     produtos = []
@@ -146,11 +176,11 @@ def localizar_produtos(root: ET.Element, impostos_selecionados: List[str]) -> Li
     for item in detalhes:
         produto_node = item["produto_node"]
         imposto_node = item["imposto_node"]
-        
+
         codigo = obter_texto(produto_node, "cProd", "Sem código")
         descricao = obter_texto(produto_node, "xProd", "Produto sem descrição")
         unidade = obter_texto(produto_node, "uCom", "UN")
-        
+
         quantidade = valor_tag(produto_node, "qCom")
         valor_produto = valor_tag(produto_node, "vProd")
         valor_unitario = valor_tag(produto_node, "vUnCom")
@@ -209,6 +239,7 @@ def localizar_produtos(root: ET.Element, impostos_selecionados: List[str]) -> Li
         produtos.append(registro)
     return produtos
 
+
 def obter_chave_acesso(root: ET.Element) -> Optional[str]:
     inf_nfe = encontrar_elemento(root, "infNFe")
     if inf_nfe is not None:
@@ -220,6 +251,7 @@ def obter_chave_acesso(root: ET.Element) -> Optional[str]:
     if len(ch_nfe) == 44 and ch_nfe.isdigit():
         return ch_nfe
     return None
+
 
 def obter_metadados_nfe(root: ET.Element) -> Dict[str, Any]:
     ide_node = encontrar_elemento(root, "ide")
@@ -242,13 +274,20 @@ def obter_metadados_nfe(root: ET.Element) -> Dict[str, Any]:
         "valor_total": round(valor_total, 2),
     }
 
+
 def nome_arquivo_padronizado(chave: str, metadados: Dict[str, Any]) -> str:
     numero = "".join(c for c in str(metadados.get("numero", "")) if c.isdigit()) or "SN"
     data = metadados.get("data_emissao", "")
     data_compacta = data.replace("-", "") if data else "sem-data"
     return f"{data_compacta}_NFe{numero}_{chave}.xml"
 
-def processar_metricas_revenda(df: pd.DataFrame, unidades_por_embalagem_dict: Dict[str, float], custo_adicional_unitario: float, markup: float) -> pd.DataFrame:
+
+def processar_metricas_revenda(
+    df: pd.DataFrame,
+    unidades_por_embalagem_dict: Dict[str, float],
+    custo_adicional_unitario: float,
+    markup: float,
+) -> pd.DataFrame:
     df["Unidades por embalagem"] = df["ID_temp"].map(
         lambda id_temp: unidades_por_embalagem_dict.get(id_temp, 1.0)
     )
@@ -273,14 +312,21 @@ def processar_metricas_revenda(df: pd.DataFrame, unidades_por_embalagem_dict: Di
         "Custo final", "Custo unitário final", "Preço de revenda unitário",
         "Total de revenda", "Lucro unitário", "Lucro total",
     ]
-    
+
     for coluna in colunas_monetarias:
         if coluna in df.columns:
             df[coluna] = df[coluna].round(2)
 
     return df
 
-st.set_page_config(page_title="Gestão de Produtos", page_icon="📦", layout="wide", initial_sidebar_state="expanded")
+
+# --- Configuração do Streamlit ---
+st.set_page_config(
+    page_title="Gestão de Produtos",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 st.markdown("""
     <style>
@@ -302,141 +348,499 @@ st.markdown("""
     div[data-testid="stAlert"] { border-radius: 8px; }
     div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { border: 1px solid #D6E0EA; border-radius: 8px; overflow: hidden; }
     hr { border-top: 1px solid #D6E0EA; }
+    .user-profile-badge {
+        background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+    .auth-card {
+        background-color: #FFFFFF;
+        border: 1px solid #D6E0EA;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
     </style>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
 
-st.title("📦 Gestão de Produtos")
-st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Importe XMLs de NF-e, calcule custos e defina preços de revenda.</p>", unsafe_allow_html=True)
+# Inicializa banco de dados
+inicializar_banco()
 
+# --- Gerenciamento de Sessão de Autenticação ---
+if "usuario" not in st.session_state:
+    st.session_state["usuario"] = None
 
-st.sidebar.header("⚙️ Configurações")
-arquivos = st.sidebar.file_uploader("1. Escolha os arquivos XML", type=["xml"], accept_multiple_files=True)
-markup = st.sidebar.number_input("2. Markup sobre o custo (%)", min_value=0.0, max_value=1000.0, value=60.0, step=1.0, format="%.2f")
-
-st.sidebar.subheader("3. Impostos considerados no custo")
-impostos_opcoes = {
-    "ICMS": st.sidebar.checkbox("Incluir ICMS", value=False),
-    "ICMS ST": st.sidebar.checkbox("Incluir ICMS-ST", value=True),
-    "FCP": st.sidebar.checkbox("Incluir FCP", value=False),
-    "FCP ST": st.sidebar.checkbox("Incluir FCP-ST", value=True),
-    "IPI": st.sidebar.checkbox("Incluir IPI", value=True),
-    "II": st.sidebar.checkbox("Incluir II", value=True),
-    "PIS": st.sidebar.checkbox("Incluir PIS", value=False),
-    "COFINS": st.sidebar.checkbox("Incluir COFINS", value=False)
-}
-impostos_selecionados = [imp for imp, ativo in impostos_opcoes.items() if ativo]
-
-st.sidebar.subheader("4. Outros custos")
-custo_adicional_unitario = st.sidebar.number_input("Custo adicional por unidade (R$)", min_value=0.0, value=0.0, step=0.01)
+# Sincroniza dados atualizados do usuário caso esteja logado
+if st.session_state["usuario"] is not None:
+    usuario_atualizado = auth.obter_usuario_por_id(st.session_state["usuario"]["id"])
+    if usuario_atualizado:
+        st.session_state["usuario"] = usuario_atualizado
 
 
-indice = carregar_indice()
-st.divider()
-st.subheader("📁 Histórico de XMLs importados")
+# ==========================================
+# TELA DE LOGIN / REGISTRO (Não Autenticado)
+# ==========================================
+if st.session_state["usuario"] is None:
+    col_l, col_m, col_r = st.columns([1, 2, 1])
+    with col_m:
+        st.markdown("<h1 style='text-align: center; border-bottom: none;'>📦 Gestão de Produtos</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #4A5A6A; font-size: 1.1rem; margin-bottom: 1.5rem;'>Acesse sua conta para gerenciar NF-e, custos e preços de revenda</p>", unsafe_allow_html=True)
 
-if not indice:
-    st.caption("Nenhum XML foi importado ainda.")
+        tab_login, tab_cadastro = st.tabs(["🔑 Entrar no Sistema", "📝 Criar Nova Conta"])
+
+        with tab_login:
+            with st.form("form_login"):
+                st.subheader("Login")
+                identificador = st.text_input("Usuário ou E-mail", placeholder="ex: felipe ou felipe@empresa.com")
+                senha = st.text_input("Senha", type="password", placeholder="Sua senha")
+                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
+
+                if btn_entrar:
+                    sucesso, resultado = auth.autenticar_usuario(identificador, senha)
+                    if sucesso:
+                        st.session_state["usuario"] = resultado
+                        st.success(f"Bem-vindo de volta, {resultado['nome']}!")
+                        st.rerun()
+                    else:
+                        st.error(resultado)
+
+        with tab_cadastro:
+            with st.form("form_cadastro"):
+                st.subheader("Cadastre-se")
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    nome = st.text_input("Nome Completo *", placeholder="ex: Felipe Moraes")
+                    usuario = st.text_input("Nome de Usuário *", placeholder="ex: felipe.moraes")
+                    empresa = st.text_input("Empresa (Opcional)", placeholder="ex: Minha Empresa LTDA")
+                with col_c2:
+                    email = st.text_input("E-mail *", placeholder="ex: felipe@empresa.com")
+                    cargo = st.text_input("Cargo / Função (Opcional)", placeholder="ex: Gestor de Compras")
+                    senha_cad = st.text_input("Senha (mínimo 6 caracteres) *", type="password")
+
+                senha_conf = st.text_input("Confirmar Senha *", type="password")
+
+                st.caption("Suas preferências de precificação padrão poderão ser editadas a qualquer momento em seu perfil.")
+                btn_cadastrar = st.form_submit_button("Criar Conta", use_container_width=True)
+
+                if btn_cadastrar:
+                    if senha_cad != senha_conf:
+                        st.error("As senhas digitadas não coincidem.")
+                    else:
+                        sucesso, msg = auth.cadastrar_usuario(
+                            usuario=usuario,
+                            nome=nome,
+                            email=email,
+                            senha=senha_cad,
+                            empresa=empresa,
+                            cargo=cargo,
+                        )
+                        if sucesso:
+                            st.success(msg + " Você já pode fazer login na aba 'Entrar no Sistema'.")
+                        else:
+                            st.error(msg)
+
 else:
-    df_historico = pd.DataFrame(list(indice.values())).sort_values("data_importacao", ascending=False)
-    st.dataframe(df_historico, use_container_width=True, hide_index=True)
+    # ==========================================
+    # ÁREA AUTENTICADA
+    # ==========================================
+    usuario_logado = st.session_state["usuario"]
 
+    # --- BARRA LATERAL (Perfil e Navegação) ---
+    with st.sidebar:
+        empresa_txt = usuario_logado.get("empresa") or "Empresa não informada"
+        cargo_txt = usuario_logado.get("cargo") or "Usuário"
 
-@st.cache_data(show_spinner="Processando XMLs...")
-def processar_arquivos_upload(dados_arquivos: list, impostos_ativos: list, dict_indice: dict):
-    todos_produtos = []
-    avisos, erros = [], []
-    novas_notas = []
-    
-    for nome_arquivo, conteudo_bytes in dados_arquivos:
-        try:
-            root = ET.fromstring(conteudo_bytes)
-        except Exception as erro:
-            erros.append(f"Erro ao processar {nome_arquivo}: {erro}")
-            continue
+        st.markdown(f"""
+            <div class="user-profile-badge">
+                <div style="font-size: 1.05rem; font-weight: 700; color: #FFFFFF;">👤 {usuario_logado['nome']}</div>
+                <div style="font-size: 0.85rem; color: #C7D6E8;">🏢 {empresa_txt}</div>
+                <div style="font-size: 0.80rem; color: #94B3D7;">💼 {cargo_txt}</div>
+            </div>
+        """, unsafe_allow_html=True)
 
-        chave_acesso = obter_chave_acesso(root)
-        metadados_nota = obter_metadados_nfe(root)
+        col_btn_logout, col_vazia = st.columns([1, 0.01])
+        with col_btn_logout:
+            if st.button("🚪 Sair (Logout)", use_container_width=True):
+                st.session_state["usuario"] = None
+                st.rerun()
 
-        if chave_acesso and chave_acesso in dict_indice:
-            avisos.append(f"⚠️ **{nome_arquivo}** já foi importado anteriormente.")
-            continue
+        st.divider()
+        menu_selecionado = st.radio(
+            "Navegação",
+            ["📦 Gestão & Precificação", "📁 Histórico de NF-e", "👤 Meu Perfil"],
+            index=0,
+        )
+        st.divider()
 
-        produtos = localizar_produtos(root, impostos_ativos)
-        if not produtos:
-            erros.append(f"Nenhum produto foi encontrado em {nome_arquivo}.")
-            continue
+    # ==========================================
+    # ABA 1: GESTÃO & PRECIFICAÇÃO
+    # ==========================================
+    if menu_selecionado == "📦 Gestão & Precificação":
+        st.title("📦 Gestão de Produtos e Precificação")
+        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Importe XMLs de NF-e, calcule custos automáticos e defina preços de revenda com base no seu perfil.</p>", unsafe_allow_html=True)
 
-        for produto in produtos:
-            produto["Arquivo XML"] = nome_arquivo
+        # Configurações na Barra Lateral (inicializadas com as preferências salvas no perfil)
+        pref_markup = float(usuario_logado.get("markup_padrao", 60.0))
+        pref_custo_adicional = float(usuario_logado.get("custo_adicional_padrao", 0.0))
+        pref_impostos = usuario_logado.get("impostos_padrao", ["ICMS ST", "FCP ST", "IPI", "II"])
 
-        todos_produtos.extend(produtos)
+        with st.sidebar:
+            st.header("⚙️ Configurações de Cálculo")
+            arquivos = st.file_uploader("1. Escolha os arquivos XML", type=["xml"], accept_multiple_files=True)
 
-        if chave_acesso:
-            nome_salvo = nome_arquivo_padronizado(chave_acesso, metadados_nota)
-            caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nome_salvo)
-            with open(caminho_salvo, "wb") as arquivo_salvo:
-                arquivo_salvo.write(conteudo_bytes)
-                
-            nova_nota = {
-                "chave_acesso": chave_acesso, "numero": metadados_nota.get("numero", ""),
-                "serie": metadados_nota.get("serie", ""), "data_emissao": metadados_nota.get("data_emissao", ""),
-                "fornecedor": metadados_nota.get("fornecedor", ""), "cnpj_emit": metadados_nota.get("cnpj_emit", ""),
-                "valor_total": metadados_nota.get("valor_total", 0), "arquivo_original": nome_arquivo,
-                "arquivo_salvo": nome_salvo, "data_importacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            }
-            novas_notas.append(nova_nota)
-            
-    return todos_produtos, novas_notas, avisos, erros
+            markup = st.number_input(
+                "2. Markup sobre o custo (%)",
+                min_value=0.0,
+                max_value=1000.0,
+                value=pref_markup,
+                step=1.0,
+                format="%.2f",
+                help="Definido pelo seu perfil. Pode ser ajustado pontualmente aqui."
+            )
 
-st.divider()
-if not arquivos:
-    st.info("Envie um ou mais arquivos XML na barra lateral para começar.")
-    st.stop()
+            st.subheader("3. Impostos considerados no custo")
+            todos_impostos = ["ICMS", "ICMS ST", "FCP", "FCP ST", "IPI", "II", "PIS", "COFINS"]
+            impostos_opcoes = {}
+            for imp in todos_impostos:
+                padrao_ativo = imp in pref_impostos
+                impostos_opcoes[imp] = st.checkbox(f"Incluir {imp}", value=padrao_ativo, key=f"calc_imp_{imp}")
 
-arquivos_para_cache = [(arq.name, arq.getvalue()) for arq in arquivos]
-produtos_extraidos, notas_para_salvar, avisos_gerados, erros_gerados = processar_arquivos_upload(
-    arquivos_para_cache, impostos_selecionados, indice
-)
+            impostos_selecionados = [imp for imp, ativo in impostos_opcoes.items() if ativo]
 
-for nota in notas_para_salvar:
-    salvar_nota(nota)
+            st.subheader("4. Outros custos")
+            custo_adicional_unitario = st.number_input(
+                "Custo adicional por unidade (R$)",
+                min_value=0.0,
+                value=pref_custo_adicional,
+                step=0.01,
+                help="Custos extras como embalagem, etiquetagem, manuseio, etc."
+            )
 
-for aviso in avisos_gerados: st.warning(aviso)
-for erro in erros_gerados: st.warning(erro)
+            if st.button("💾 Salvar como meu padrão de perfil", use_container_width=True):
+                sucesso, msg = auth.atualizar_perfil(
+                    usuario_id=usuario_logado["id"],
+                    nome=usuario_logado["nome"],
+                    email=usuario_logado["email"],
+                    empresa=usuario_logado.get("empresa", ""),
+                    cargo=usuario_logado.get("cargo", ""),
+                    markup_padrao=markup,
+                    custo_adicional_padrao=custo_adicional_unitario,
+                    impostos_padrao=impostos_selecionados,
+                )
+                if sucesso:
+                    st.session_state["usuario"] = auth.obter_usuario_por_id(usuario_logado["id"])
+                    st.sidebar.success("Preferências salvas como padrão do seu perfil!")
+                else:
+                    st.sidebar.error(msg)
 
-if not produtos_extraidos:
-    st.error("Nenhum produto novo foi encontrado nos arquivos enviados.")
-    st.stop()
+        # Carrega índice existente
+        indice = carregar_indice(usuario_id=usuario_logado["id"])
 
-df = pd.DataFrame(produtos_extraidos)
+        @st.cache_data(show_spinner="Processando XMLs...")
+        def processar_arquivos_upload(dados_arquivos: list, impostos_ativos: list, dict_indice: dict, id_user: int):
+            todos_produtos = []
+            avisos, erros = [], []
+            novas_notas = []
 
-st.divider()
-st.subheader("🔢 Unidades reais por produto")
+            for nome_arquivo, conteudo_bytes in dados_arquivos:
+                try:
+                    root = ET.fromstring(conteudo_bytes)
+                except Exception as erro:
+                    erros.append(f"Erro ao processar {nome_arquivo}: {erro}")
+                    continue
 
-df["ID_temp"] = df["Código"].astype(str) + "_" + df["Arquivo XML"].astype(str)
+                chave_acesso = obter_chave_acesso(root)
+                metadados_nota = obter_metadados_nfe(root)
 
-if "unidades_por_embalagem" not in st.session_state:
-    st.session_state["unidades_por_embalagem"] = {}
+                if chave_acesso and chave_acesso in dict_indice:
+                    avisos.append(f"⚠️ **{nome_arquivo}** já foi importado anteriormente.")
+                    continue
 
-df_editor_base = df[["ID_temp", "Código", "Produto", "Unidade", "Quantidade", "Arquivo XML"]].copy()
-df_editor_base["Unidades por embalagem"] = df_editor_base["ID_temp"].map(
-    lambda id_temp: st.session_state["unidades_por_embalagem"].get(id_temp, 1.0)
-)
+                produtos = localizar_produtos(root, impostos_ativos)
+                if not produtos:
+                    erros.append(f"Nenhum produto foi encontrado em {nome_arquivo}.")
+                    continue
 
-df_editado = st.data_editor(
-    df_editor_base, use_container_width=True, hide_index=True,
-    disabled=["ID_temp", "Código", "Produto", "Unidade", "Quantidade", "Arquivo XML"],
-    key="editor_unidades_por_embalagem",
-)
+                for produto in produtos:
+                    produto["Arquivo XML"] = nome_arquivo
 
-novas_unidades = df_editado.set_index("ID_temp")["Unidades por embalagem"].to_dict()
-st.session_state["unidades_por_embalagem"].update(novas_unidades)
+                todos_produtos.extend(produtos)
 
-df = processar_metricas_revenda(df, st.session_state["unidades_por_embalagem"], custo_adicional_unitario, markup)
-df = df.drop(columns=["ID_temp"])
+                if chave_acesso:
+                    nome_salvo = nome_arquivo_padronizado(chave_acesso, metadados_nota)
+                    caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nome_salvo)
+                    with open(caminho_salvo, "wb") as arquivo_salvo:
+                        arquivo_salvo.write(conteudo_bytes)
 
-st.success(f"{len(df)} produto(s) processado(s) com sucesso.")
+                    nova_nota = {
+                        "chave_acesso": chave_acesso,
+                        "numero": metadados_nota.get("numero", ""),
+                        "serie": metadados_nota.get("serie", ""),
+                        "data_emissao": metadados_nota.get("data_emissao", ""),
+                        "fornecedor": metadados_nota.get("fornecedor", ""),
+                        "cnpj_emit": metadados_nota.get("cnpj_emit", ""),
+                        "valor_total": metadados_nota.get("valor_total", 0),
+                        "arquivo_original": nome_arquivo,
+                        "arquivo_salvo": nome_salvo,
+                        "data_importacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "usuario_id": id_user,
+                    }
+                    novas_notas.append(nova_nota)
 
-st.divider()
-st.subheader("📋 Produtos processados")
-st.dataframe(df, use_container_width=True, hide_index=True)
+            return todos_produtos, novas_notas, avisos, erros
+
+        if not arquivos:
+            st.info("💡 Envie um ou mais arquivos XML de NF-e na barra lateral para iniciar o processamento de custos e formação de preços.")
+
+            # Exibe resumo do histórico recente
+            if indice:
+                st.divider()
+                st.subheader("📋 Últimas notas fiscais processadas")
+                df_historico_recente = pd.DataFrame(list(indice.values())).head(5)
+                cols_recentes = [c for c in ["numero", "serie", "fornecedor", "data_emissao", "valor_total", "data_importacao"] if c in df_historico_recente.columns]
+                st.dataframe(df_historico_recente[cols_recentes], use_container_width=True, hide_index=True)
+        else:
+            arquivos_para_cache = [(arq.name, arq.getvalue()) for arq in arquivos]
+            produtos_extraidos, notas_para_salvar, avisos_gerados, erros_gerados = processar_arquivos_upload(
+                arquivos_para_cache, impostos_selecionados, indice, usuario_logado["id"]
+            )
+
+            for nota in notas_para_salvar:
+                salvar_nota(nota)
+
+            for aviso in avisos_gerados:
+                st.warning(aviso)
+            for erro in erros_gerados:
+                st.error(erro)
+
+            if not produtos_extraidos:
+                st.error("Nenhum produto novo foi encontrado nos arquivos enviados.")
+            else:
+                df = pd.DataFrame(produtos_extraidos)
+
+                st.divider()
+                st.subheader("🔢 1. Ajuste de Unidades Reais por Embalagem")
+                st.caption("Caso o produto tenha sido comprado em caixa/fardo e você revenda individualmente, ajuste a quantidade por embalagem.")
+
+                df["ID_temp"] = df["Código"].astype(str) + "_" + df["Arquivo XML"].astype(str)
+
+                if "unidades_por_embalagem" not in st.session_state:
+                    st.session_state["unidades_por_embalagem"] = {}
+
+                df_editor_base = df[["ID_temp", "Código", "Produto", "Unidade", "Quantidade", "Arquivo XML"]].copy()
+                df_editor_base["Unidades por embalagem"] = df_editor_base["ID_temp"].map(
+                    lambda id_temp: st.session_state["unidades_por_embalagem"].get(id_temp, 1.0)
+                )
+
+                df_editado = st.data_editor(
+                    df_editor_base,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=["ID_temp", "Código", "Produto", "Unidade", "Quantidade", "Arquivo XML"],
+                    key="editor_unidades_por_embalagem",
+                )
+
+                novas_unidades = df_editado.set_index("ID_temp")["Unidades por embalagem"].to_dict()
+                st.session_state["unidades_por_embalagem"].update(novas_unidades)
+
+                df = processar_metricas_revenda(
+                    df,
+                    st.session_state["unidades_por_embalagem"],
+                    custo_adicional_unitario,
+                    markup,
+                )
+                df = df.drop(columns=["ID_temp"])
+
+                # Métricas em destaque
+                st.divider()
+                st.subheader("📊 2. Resumo Consolidado dos Produtos")
+
+                col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                col_m1.metric("Qtd. Itens Únicos", f"{len(df)}")
+                col_m2.metric("Custo Total Acumulado", f"R$ {df['Custo final'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                col_m3.metric("Faturamento Estimado", f"R$ {df['Total de revenda'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                col_m4.metric("Lucro Bruto Estimado", f"R$ {df['Lucro total'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+                st.divider()
+                st.subheader("📋 3. Tabela Detalhada de Custos e Formação de Preço")
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                # Botão de exportação
+                csv_data = df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+                st.download_button(
+                    label="📥 Exportar Tabela para Excel (CSV)",
+                    data=csv_data,
+                    file_name=f"precificacao_produtos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                    mime="text/csv",
+                )
+
+    # ==========================================
+    # ABA 2: HISTÓRICO DE NF-E
+    # ==========================================
+    elif menu_selecionado == "📁 Histórico de NF-e":
+        st.title("📁 Histórico de Notas Fiscais Importadas")
+        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Consulte todas as NF-e vinculadas à sua conta e histórico de importações.</p>", unsafe_allow_html=True)
+
+        indice = carregar_indice(usuario_id=usuario_logado["id"])
+
+        if not indice:
+            st.info("Nenhuma nota fiscal foi importada ainda para este usuário.")
+        else:
+            df_hist = pd.DataFrame(list(indice.values())).sort_values("data_importacao", ascending=False)
+
+            col_h1, col_h2, col_h3 = st.columns(3)
+            col_h1.metric("Total de Notas Importadas", f"{len(df_hist)}")
+            col_h2.metric("Valor Total Acumulado", f"R$ {df_hist['valor_total'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            col_h3.metric("Fornecedores Atendidos", f"{df_hist['fornecedor'].nunique()}")
+
+            st.divider()
+            st.subheader("Filtros")
+            filtro_pesquisa = st.text_input("🔍 Buscar por número de nota, fornecedor ou CNPJ", placeholder="Digite para filtrar...")
+
+            if filtro_pesquisa:
+                termo = filtro_pesquisa.lower()
+                df_hist = df_hist[
+                    df_hist["numero"].astype(str).str.lower().str.contains(termo) |
+                    df_hist["fornecedor"].astype(str).str.lower().str.contains(termo) |
+                    df_hist["cnpj_emit"].astype(str).str.lower().str.contains(termo)
+                ]
+
+            colunas_exibir = [
+                "numero", "serie", "data_emissao", "fornecedor", "cnpj_emit",
+                "valor_total", "data_importacao", "arquivo_original"
+            ]
+            colunas_existentes = [c for c in colunas_exibir if c in df_hist.columns]
+
+            st.dataframe(df_hist[colunas_existentes], use_container_width=True, hide_index=True)
+
+    # ==========================================
+    # ABA 3: MEU PERFIL E SALVAMENTO DE CONFIGURAÇÕES
+    # ==========================================
+    elif menu_selecionado == "👤 Meu Perfil":
+        st.title("👤 Meu Perfil e Preferências")
+        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Gerencie seus dados de acesso, informações da empresa e salve suas preferências padrão de cálculo.</p>", unsafe_allow_html=True)
+
+        tab_dados, tab_preferencias, tab_seguranca = st.tabs([
+            "📋 Dados Cadastrais",
+            "⚙️ Preferências Padrão de Precificação",
+            "🔒 Segurança e Senha"
+        ])
+
+        # Tab 1: Dados Cadastrais
+        with tab_dados:
+            st.subheader("Informações Cadastrais")
+            with st.form("form_perfil_dados"):
+                col_p1, col_p2 = st.columns(2)
+                with col_p1:
+                    p_nome = st.text_input("Nome Completo", value=usuario_logado["nome"])
+                    p_usuario = st.text_input("Nome de Usuário", value=usuario_logado["usuario"], disabled=True, help="O nome de usuário não pode ser alterado.")
+                    p_empresa = st.text_input("Empresa", value=usuario_logado.get("empresa", ""))
+                with col_p2:
+                    p_email = st.text_input("E-mail", value=usuario_logado["email"])
+                    p_cargo = st.text_input("Cargo / Função", value=usuario_logado.get("cargo", ""))
+                    p_criado = st.text_input("Membro desde", value=usuario_logado.get("criado_em", "-"), disabled=True)
+
+                btn_salvar_dados = st.form_submit_button("💾 Salvar Dados do Perfil")
+
+                if btn_salvar_dados:
+                    sucesso, msg = auth.atualizar_perfil(
+                        usuario_id=usuario_logado["id"],
+                        nome=p_nome,
+                        email=p_email,
+                        empresa=p_empresa,
+                        cargo=p_cargo,
+                        markup_padrao=usuario_logado.get("markup_padrao", 60.0),
+                        custo_adicional_padrao=usuario_logado.get("custo_adicional_padrao", 0.0),
+                        impostos_padrao=usuario_logado.get("impostos_padrao", ["ICMS ST", "FCP ST", "IPI", "II"]),
+                    )
+                    if sucesso:
+                        st.session_state["usuario"] = auth.obter_usuario_por_id(usuario_logado["id"])
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        # Tab 2: Preferências Padrão de Precificação
+        with tab_preferencias:
+            st.subheader("Configurações Padrão de Precificação")
+            st.caption("Defina os valores que serão carregados automaticamente sempre que você entrar na aba de Gestão & Precificação.")
+
+            with st.form("form_perfil_preferencias"):
+                col_pref1, col_pref2 = st.columns(2)
+                with col_pref1:
+                    p_markup = st.number_input(
+                        "Markup Padrão (%)",
+                        min_value=0.0,
+                        max_value=1000.0,
+                        value=float(usuario_logado.get("markup_padrao", 60.0)),
+                        step=1.0,
+                        format="%.2f"
+                    )
+                    p_custo_adicional = st.number_input(
+                        "Custo Adicional Padrão por Unidade (R$)",
+                        min_value=0.0,
+                        value=float(usuario_logado.get("custo_adicional_padrao", 0.0)),
+                        step=0.01
+                    )
+
+                with col_pref2:
+                    st.markdown("**Impostos Padrão Incluídos no Custo:**")
+                    todos_impostos = ["ICMS", "ICMS ST", "FCP", "FCP ST", "IPI", "II", "PIS", "COFINS"]
+                    impostos_atuais = usuario_logado.get("impostos_padrao", ["ICMS ST", "FCP ST", "IPI", "II"])
+
+                    impostos_checks = {}
+                    col_i1, col_i2 = st.columns(2)
+                    for i, imp in enumerate(todos_impostos):
+                        target_col = col_i1 if i < 4 else col_i2
+                        impostos_checks[imp] = target_col.checkbox(
+                            imp,
+                            value=(imp in impostos_atuais),
+                            key=f"pref_chk_{imp}"
+                        )
+
+            btn_salvar_pref = st.form_submit_button("💾 Salvar Preferências de Precificação")
+
+            if btn_salvar_pref:
+                novos_impostos = [imp for imp, ativo in impostos_checks.items() if ativo]
+                sucesso, msg = auth.atualizar_perfil(
+                    usuario_id=usuario_logado["id"],
+                    nome=usuario_logado["nome"],
+                    email=usuario_logado["email"],
+                    empresa=usuario_logado.get("empresa", ""),
+                    cargo=usuario_logado.get("cargo", ""),
+                    markup_padrao=p_markup,
+                    custo_adicional_padrao=p_custo_adicional,
+                    impostos_padrao=novos_impostos,
+                )
+                if sucesso:
+                    st.session_state["usuario"] = auth.obter_usuario_por_id(usuario_logado["id"])
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+        # Tab 3: Segurança e Senha
+        with tab_seguranca:
+            st.subheader("Alteração de Senha")
+            with st.form("form_alterar_senha"):
+                s_atual = st.text_input("Senha Atual", type="password")
+                s_nova = st.text_input("Nova Senha (mínimo 6 caracteres)", type="password")
+                s_confirma = st.text_input("Confirmar Nova Senha", type="password")
+
+                btn_trocar_senha = st.form_submit_button("🔒 Atualizar Senha")
+
+                if btn_trocar_senha:
+                    if s_nova != s_confirma:
+                        st.error("A nova senha e a confirmação não coincidem.")
+                    else:
+                        sucesso, msg = auth.alterar_senha(
+                            usuario_id=usuario_logado["id"],
+                            senha_atual=s_atual,
+                            nova_senha=s_nova,
+                        )
+                        if sucesso:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
