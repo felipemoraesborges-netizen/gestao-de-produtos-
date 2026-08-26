@@ -1024,7 +1024,7 @@ else:
                             key=f"pref_chk_{imp}"
                         )
 
-            btn_salvar_pref = st.form_submit_button("💾 Salvar Preferências de Precificação")
+                btn_salvar_pref = st.form_submit_button("💾 Salvar Preferências de Precificação")
 
             if btn_salvar_pref:
                 novos_impostos = [imp for imp, ativo in impostos_checks.items() if ativo]
