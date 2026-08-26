@@ -40,6 +40,18 @@ def inicializar_banco() -> None:
     if "usuario_id" not in colunas:
         cursor.execute("ALTER TABLE historico_nfe ADD COLUMN usuario_id INTEGER")
 
+    # Tabela para configurações de cálculo por nota (markup, impostos, etc.)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS configuracoes_nota (
+            chave_acesso TEXT PRIMARY KEY,
+            markup REAL DEFAULT 60.0,
+            custo_adicional REAL DEFAULT 0.0,
+            impostos TEXT DEFAULT '[]',
+            unidades_por_embalagem TEXT DEFAULT '{}',
+            atualizado_em TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -78,6 +90,70 @@ def salvar_nota(dados: Dict[str, Any]) -> None:
     """, dados)
     conn.commit()
     conn.close()
+
+
+def salvar_config_nota(chave_acesso: str, markup: float, custo_adicional: float,
+                       impostos: List[str], unidades_por_embalagem: Dict[str, float]) -> None:
+    """Salva as configurações de cálculo de uma nota específica."""
+    import json
+    inicializar_banco()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO configuracoes_nota
+        (chave_acesso, markup, custo_adicional, impostos, unidades_por_embalagem, atualizado_em)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        chave_acesso,
+        markup,
+        custo_adicional,
+        json.dumps(impostos),
+        json.dumps(unidades_por_embalagem),
+        datetime.now().strftime("%d/%m/%Y %H:%M"),
+    ))
+    conn.commit()
+    conn.close()
+
+
+def carregar_config_nota(chave_acesso: str, defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Carrega as configurações salvas de uma nota. Retorna defaults se não houver registro."""
+    import json
+    inicializar_banco()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM configuracoes_nota WHERE chave_acesso = ?", (chave_acesso,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "markup": row["markup"],
+            "custo_adicional": row["custo_adicional"],
+            "impostos": json.loads(row["impostos"]),
+            "unidades_por_embalagem": json.loads(row["unidades_por_embalagem"]),
+            "atualizado_em": row["atualizado_em"],
+        }
+    # Sem registro salvo — usa defaults do usuário ou valores padrão
+    d = defaults or {}
+    return {
+        "markup": d.get("markup_padrao", 60.0),
+        "custo_adicional": d.get("custo_adicional_padrao", 0.0),
+        "impostos": d.get("impostos_padrao", ["ICMS ST", "FCP ST", "IPI", "II"]),
+        "unidades_por_embalagem": {},
+        "atualizado_em": None,
+    }
+
+
+def carregar_produtos_da_nota(arquivo_salvo: str, impostos_selecionados: List[str]) -> List[Dict[str, Any]]:
+    """Relê o XML salvo em xmls_processados/ e retorna lista de produtos brutos."""
+    caminho = os.path.join(PASTA_XMLS_PROCESSADOS, arquivo_salvo)
+    if not os.path.exists(caminho):
+        return []
+    try:
+        root = ET.parse(caminho).getroot()
+        return localizar_produtos(root, impostos_selecionados)
+    except Exception:
+        return []
 
 
 def nome_tag(elemento: ET.Element) -> str:
@@ -681,7 +757,7 @@ else:
     # ==========================================
     elif menu_selecionado == "📁 Histórico de NF-e":
         st.title("📁 Histórico de Notas Fiscais Importadas")
-        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Consulte todas as NF-e vinculadas à sua conta e histórico de importações.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Consulte todas as NF-e vinculadas à sua conta, revise os produtos e edite as configurações de precificação.</p>", unsafe_allow_html=True)
 
         indice = carregar_indice(usuario_id=usuario_logado["id"])
 
@@ -714,6 +790,154 @@ else:
             colunas_existentes = [c for c in colunas_exibir if c in df_hist.columns]
 
             st.dataframe(df_hist[colunas_existentes], use_container_width=True, hide_index=True)
+
+            # ------------------------------------------------------------------
+            # SEÇÃO: Revisar e Editar produtos de uma nota selecionada
+            # ------------------------------------------------------------------
+            st.divider()
+            st.subheader("👁️ Revisar / Editar Produtos de uma Nota")
+            st.caption("Selecione uma nota para visualizar seus produtos, ajustar configurações de cálculo e salvar as preferências desta nota.")
+
+            # Monta opções de seleção formatadas
+            opcoes_notas = {
+                f"NF {row.get('numero', '—')}  |  {row.get('fornecedor', '—')}  |  {row.get('data_emissao', '—')}": row.get("chave_acesso", "")
+                for _, row in df_hist.iterrows()
+                if row.get("arquivo_salvo")
+            }
+
+            if not opcoes_notas:
+                st.warning("Nenhuma nota com arquivo XML salvo foi encontrada. Apenas notas importadas via upload possuem arquivo disponível para revisão.")
+            else:
+                nota_selecionada_label = st.selectbox(
+                    "Selecione a Nota Fiscal",
+                    options=list(opcoes_notas.keys()),
+                    index=0,
+                    key="hist_nota_selecionada"
+                )
+                chave_selecionada = opcoes_notas[nota_selecionada_label]
+
+                # Recupera o registro completo da nota selecionada
+                nota_info = indice.get(chave_selecionada, {})
+                arquivo_salvo = nota_info.get("arquivo_salvo", "")
+
+                # Carrega configurações salvas (ou defaults do perfil do usuário)
+                config_salva = carregar_config_nota(chave_selecionada, defaults=usuario_logado)
+
+                with st.expander("⚙️ Configurações de Cálculo desta Nota", expanded=True):
+                    col_cfg1, col_cfg2 = st.columns(2)
+
+                    with col_cfg1:
+                        hist_markup = st.number_input(
+                            "Markup sobre o custo (%)",
+                            min_value=0.0, max_value=1000.0,
+                            value=float(config_salva["markup"]),
+                            step=1.0, format="%.2f",
+                            key=f"hist_markup_{chave_selecionada}"
+                        )
+                        hist_custo_adicional = st.number_input(
+                            "Custo adicional por unidade (R$)",
+                            min_value=0.0,
+                            value=float(config_salva["custo_adicional"]),
+                            step=0.01,
+                            key=f"hist_custo_{chave_selecionada}"
+                        )
+                        if config_salva.get("atualizado_em"):
+                            st.caption(f"💾 Última configuração salva em: {config_salva['atualizado_em']}")
+
+                    with col_cfg2:
+                        st.markdown("**Impostos considerados no custo:**")
+                        todos_impostos_h = ["ICMS", "ICMS ST", "FCP", "FCP ST", "IPI", "II", "PIS", "COFINS"]
+                        impostos_salvos = config_salva["impostos"]
+                        hist_impostos_opcoes = {}
+                        col_i1h, col_i2h = st.columns(2)
+                        for i, imp in enumerate(todos_impostos_h):
+                            target_col = col_i1h if i < 4 else col_i2h
+                            hist_impostos_opcoes[imp] = target_col.checkbox(
+                                imp,
+                                value=(imp in impostos_salvos),
+                                key=f"hist_imp_{chave_selecionada}_{imp}"
+                            )
+                    hist_impostos_selecionados = [imp for imp, ativo in hist_impostos_opcoes.items() if ativo]
+
+                # Carrega produtos do XML salvo
+                produtos_nota = carregar_produtos_da_nota(arquivo_salvo, hist_impostos_selecionados)
+
+                if not produtos_nota:
+                    st.warning(f"Não foi possível carregar os produtos. O arquivo XML da nota pode não estar disponível em `{PASTA_XMLS_PROCESSADOS}/`.")
+                else:
+                    df_nota = pd.DataFrame(produtos_nota)
+                    df_nota["ID_temp"] = df_nota["Código"].astype(str) + "_" + arquivo_salvo
+
+                    # Unidades por embalagem
+                    st.markdown("**📦 Ajuste de Unidades por Embalagem**")
+                    st.caption("Caso o produto seja revendido individualmente (ex: caixa com 12 unidades), ajuste abaixo.")
+
+                    unid_session_key = f"hist_unid_{chave_selecionada}"
+                    if unid_session_key not in st.session_state:
+                        st.session_state[unid_session_key] = {
+                            k: v for k, v in config_salva["unidades_por_embalagem"].items()
+                        }
+
+                    df_editor_hist = df_nota[["ID_temp", "Código", "Produto", "Unidade", "Quantidade"]].copy()
+                    df_editor_hist["Unidades por embalagem"] = df_editor_hist["ID_temp"].map(
+                        lambda id_temp: st.session_state[unid_session_key].get(id_temp, 1.0)
+                    )
+
+                    df_editado_hist = st.data_editor(
+                        df_editor_hist,
+                        use_container_width=True,
+                        hide_index=True,
+                        disabled=["ID_temp", "Código", "Produto", "Unidade", "Quantidade"],
+                        key=f"editor_hist_{chave_selecionada}",
+                    )
+
+                    novas_unid = df_editado_hist.set_index("ID_temp")["Unidades por embalagem"].to_dict()
+                    st.session_state[unid_session_key].update(novas_unid)
+
+                    # Processa métricas com as configurações desta nota
+                    df_nota_calc = processar_metricas_revenda(
+                        df_nota.copy(),
+                        st.session_state[unid_session_key],
+                        hist_custo_adicional,
+                        hist_markup,
+                    )
+                    df_nota_calc = df_nota_calc.drop(columns=["ID_temp"], errors="ignore")
+
+                    # Métricas resumo
+                    st.divider()
+                    st.subheader("📊 Resumo dos Produtos")
+                    col_nm1, col_nm2, col_nm3, col_nm4 = st.columns(4)
+                    col_nm1.metric("Itens", f"{len(df_nota_calc)}")
+                    col_nm2.metric("Custo Total", f"R$ {df_nota_calc['Custo final'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    col_nm3.metric("Faturamento Estimado", f"R$ {df_nota_calc['Total de revenda'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    col_nm4.metric("Lucro Bruto Estimado", f"R$ {df_nota_calc['Lucro total'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+                    st.subheader("📋 Tabela Detalhada")
+                    st.dataframe(df_nota_calc, use_container_width=True, hide_index=True)
+
+                    col_save, col_export = st.columns([1, 1])
+
+                    with col_save:
+                        if st.button("💾 Salvar configurações desta nota", use_container_width=True, key=f"btn_salvar_cfg_{chave_selecionada}"):
+                            salvar_config_nota(
+                                chave_acesso=chave_selecionada,
+                                markup=hist_markup,
+                                custo_adicional=hist_custo_adicional,
+                                impostos=hist_impostos_selecionados,
+                                unidades_por_embalagem=st.session_state[unid_session_key],
+                            )
+                            st.success("✅ Configurações salvas com sucesso! Elas serão carregadas automaticamente na próxima vez que você acessar esta nota.")
+
+                    with col_export:
+                        csv_hist = df_nota_calc.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+                        st.download_button(
+                            label="📥 Exportar para Excel (CSV)",
+                            data=csv_hist,
+                            file_name=f"produtos_nota_{nota_info.get('numero', 'SN')}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                            mime="text/csv",
+                            use_container_width=True,
+                            key=f"btn_export_{chave_selecionada}",
+                        )
 
     # ==========================================
     # ABA 3: MEU PERFIL E SALVAMENTO DE CONFIGURAÇÕES
