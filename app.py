@@ -416,6 +416,36 @@ st.markdown("""
     section[data-testid="stSidebar"] [data-testid="stCaptionContainer"], section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small { color: #C7D6E8 !important; opacity: 1 !important; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FFFFFF !important; border-bottom: none; }
     section[data-testid="stSidebar"] .stCheckbox { background-color: rgba(255, 255, 255, 0.06); border-radius: 6px; padding: 2px 6px; margin-bottom: 2px; }
+    section[data-testid="stSidebar"] input,
+    section[data-testid="stSidebar"] textarea,
+    section[data-testid="stSidebar"] [data-baseweb="input"] input,
+    section[data-testid="stSidebar"] [data-baseweb="base-input"] input,
+    section[data-testid="stSidebar"] [data-testid="stNumberInput"] input {
+        background-color: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        border-radius: 6px !important;
+    }
+    section[data-testid="stSidebar"] [data-baseweb="input"],
+    section[data-testid="stSidebar"] [data-baseweb="base-input"],
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+        background-color: rgba(255, 255, 255, 0.10) !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        border-radius: 8px !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * { color: #FFFFFF !important; }
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+        background-color: rgba(255,255,255,0.2) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255,255,255,0.35) !important;
+    }
+    section[data-testid="stSidebar"] input::placeholder { color: rgba(255,255,255,0.45) !important; }
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div,
+    section[data-testid="stSidebar"] [data-baseweb="select"] input {
+        background-color: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
+        border-color: rgba(255,255,255,0.25) !important;
+    }
     div[data-testid="stMetric"] { background-color: #F0F4F8; border: 1px solid #D6E0EA; border-left: 5px solid #1B4F8C; border-radius: 8px; padding: 1rem 1.2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); }
     div[data-testid="stMetricLabel"] { color: #4A5A6A; font-weight: 600; }
     div[data-testid="stMetricValue"] { color: #1B4F8C; font-weight: 700; }
