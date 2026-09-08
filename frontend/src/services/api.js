@@ -106,3 +106,21 @@ export async function downloadCalculatedCsv(produtos) {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+export async function downloadCalculatedExcel(produtos) {
+  const res = await fetch(`${API_BASE}/nfe/export-excel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(produtos),
+  });
+  if (!res.ok) throw new Error('Erro ao exportar planilha Excel');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `precificacao_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

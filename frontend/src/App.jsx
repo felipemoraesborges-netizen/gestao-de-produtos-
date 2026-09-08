@@ -18,6 +18,7 @@ import {
   uploadXmlFiles,
   calculateMetrics,
   downloadCalculatedCsv,
+  downloadCalculatedExcel,
 } from './services/api';
 
 export default function App() {
@@ -187,6 +188,16 @@ export default function App() {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (produtos.length === 0) return;
+    try {
+      await downloadCalculatedExcel(produtos);
+      showToast('Planilha Excel exportada com sucesso!', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Logout handler
   const handleLogout = () => {
     setUser(null);
@@ -248,6 +259,7 @@ export default function App() {
                 unidadesPorEmbalagem={unidadesPorEmbalagem}
                 onUpdateUnidade={handleUpdateUnidade}
                 onExportCsv={handleExportCsv}
+                onExportExcel={handleExportExcel}
               />
             )}
 

@@ -16,6 +16,7 @@ export default function ProductTable({
   unidadesPorEmbalagem,
   onUpdateUnidade,
   onExportCsv,
+  onExportExcel,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('produto');
@@ -88,14 +89,23 @@ export default function ProductTable({
             />
           </div>
 
-          {/* Export Button */}
-          <button
-            onClick={onExportCsv}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all duration-200"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Exportar CSV
-          </button>
+          {/* Export Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onExportExcel}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all duration-200"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar Excel
+            </button>
+            <button
+              onClick={onExportCsv}
+              className="flex items-center gap-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold px-3.5 py-2 rounded-xl transition-all duration-200"
+            >
+              <Download className="w-4 h-4" />
+              Exportar CSV
+            </button>
+          </div>
         </div>
       </div>
 

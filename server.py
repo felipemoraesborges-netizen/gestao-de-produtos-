@@ -10,6 +10,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile, stat
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from openpyxl.styles import Alignment, Font, PatternFill
 from pydantic import BaseModel, EmailStr
 import pandas as pd
 
@@ -649,6 +650,81 @@ def export_csv(produtos: List[Dict[str, Any]]):
         headers={
             "Content-Disposition": f"attachment; filename=precificacao_produtos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         }
+    )
+
+
+@app.post("/api/nfe/export-excel")
+def export_excel(produtos: List[Dict[str, Any]]):
+    df = pd.DataFrame(produtos)
+
+    mapeamento_colunas = {
+        "codigo": "Código",
+        "produto": "Produto",
+        "unidade": "Unidade Original",
+        "quantidade": "Qtd NF-e",
+        "unidades_por_embalagem": "Unidades / Embalagem",
+        "quantidade_real": "Qtd Real para Venda",
+        "valor_produtos": "Valor dos Produtos (R$)",
+        "custo_unitario_original": "Custo Unitário Original (R$)",
+        "frete": "Frete (R$)",
+        "seguro": "Seguro (R$)",
+        "desconto": "Desconto (R$)",
+        "outras_despesas": "Outras Despesas (R$)",
+        "impostos_incluidos": "Total Impostos no Custo (R$)",
+        "custo_adicional_total": "Custo Adicional Total (R$)",
+        "custo_final": "Custo Final Total (R$)",
+        "custo_unitario_final": "Custo Unitário Final (R$)",
+        "preco_revenda_unitario": "Preço de Venda Sugerido (R$)",
+        "total_revenda": "Faturamento Estimado (R$)",
+        "lucro_unitario": "Lucro Unitário (R$)",
+        "lucro_total": "Lucro Total Estimado (R$)",
+        "margem_lucro_pct": "Margem de Lucro (%)",
+        "arquivo_xml": "Arquivo XML",
+        "fornecedor": "Fornecedor",
+        "numero_nota": "NF-e Nº",
+    }
+    colunas_presentes = [c for c in mapeamento_colunas if c in df.columns]
+    df_export = df[colunas_presentes].rename(columns=mapeamento_colunas)
+
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        df_export.to_excel(writer, index=False, sheet_name="Precificação")
+        worksheet = writer.book["Precificação"]
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = worksheet.dimensions
+
+        header_fill = PatternFill("solid", fgColor="0C8DE4")
+        for cell in worksheet[1]:
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for column_cells in worksheet.columns:
+            column_letter = column_cells[0].column_letter
+            max_length = max(len(str(cell.value or "")) for cell in column_cells)
+            worksheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 40)
+
+        for column_name in df_export.columns:
+            column_index = df_export.columns.get_loc(column_name) + 1
+            if "(R$)" in column_name:
+                for cells in worksheet.iter_cols(
+                    min_col=column_index, max_col=column_index, min_row=2
+                ):
+                    for cell in cells:
+                        cell.number_format = '"R$" #,##0.00'
+            elif "(%)" in column_name:
+                for cells in worksheet.iter_cols(
+                    min_col=column_index, max_col=column_index, min_row=2
+                ):
+                    for cell in cells:
+                        cell.number_format = '0.00"%"'
+
+    return Response(
+        content=excel_buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=precificacao_produtos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        },
     )
 
 
