@@ -38,6 +38,7 @@ export default function App() {
 
   // 3. Pricing & Product State
   const [produtos, setProdutos] = useState([]);
+  const [baseProdutos, setBaseProdutos] = useState([]);
   const [resumo, setResumo] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSavingDefault, setIsSavingDefault] = useState(false);
@@ -65,10 +66,10 @@ export default function App() {
 
   // Recalculate metrics when parameters or packaging change
   const runRecalculate = useCallback(async () => {
-    if (produtos.length === 0) return;
+    if (baseProdutos.length === 0) return;
     try {
       const calcResult = await calculateMetrics({
-        produtos,
+        produtos: baseProdutos,
         markup,
         custo_adicional_unitario: custoAdicional,
         impostos_selecionados: selectedTaxes,
@@ -79,19 +80,19 @@ export default function App() {
     } catch (err) {
       console.error('Erro ao recalcular:', err);
     }
-  }, [produtos, markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem]);
+  }, [baseProdutos, markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem]);
 
   // Debounced live calculation when inputs change
   const calcTimeoutRef = useRef(null);
   useEffect(() => {
-    if (produtos.length > 0) {
+    if (baseProdutos.length > 0) {
       clearTimeout(calcTimeoutRef.current);
       calcTimeoutRef.current = setTimeout(() => {
         runRecalculate();
       }, 150);
     }
     return () => clearTimeout(calcTimeoutRef.current);
-  }, [markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem]);
+  }, [baseProdutos, markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem, runRecalculate]);
 
   // Handle XML File Upload
   const handleUploadXmls = async (files) => {
@@ -123,6 +124,7 @@ export default function App() {
           unidades_por_embalagem: initialUnidades,
         });
 
+        setBaseProdutos(res.produtos);
         setProdutos(calcResult.produtos);
         setResumo(calcResult.resumo);
 
@@ -202,6 +204,7 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
     setProdutos([]);
+    setBaseProdutos([]);
     setResumo(null);
     setActiveTab('pricing');
     showToast('Sessão encerrada com sucesso.', 'info');
