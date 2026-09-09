@@ -14,6 +14,7 @@ import ProfilePage from './pages/ProfilePage';
 
 import {
   getUserProfile,
+  logoutUser,
   updateUserProfile,
   uploadXmlFiles,
   calculateMetrics,
@@ -23,14 +24,8 @@ import {
 
 export default function App() {
   // 1. Authentication State
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('gestao_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   // 2. Navigation State
   const [activeTab, setActiveTab] = useState('pricing');
@@ -52,15 +47,32 @@ export default function App() {
     setToast({ message, type });
   };
 
+  // Restore and validate the saved session when the application starts.
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const freshUser = await getUserProfile();
+        if (!cancelled) setUser(freshUser);
+      } catch (error) {
+        console.error('Sessão salva inválida ou expirada:', error);
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setIsRestoringSession(false);
+      }
+    };
+
+    restoreSession();
+    return () => { cancelled = true; };
+  }, []);
+
   // Sync user defaults when user logs in or profile changes
   useEffect(() => {
     if (user) {
       if (user.markup_padrao !== undefined) setMarkup(Number(user.markup_padrao));
       if (user.custo_adicional_padrao !== undefined) setCustoAdicional(Number(user.custo_adicional_padrao));
       if (user.impostos_padrao && Array.isArray(user.impostos_padrao)) setSelectedTaxes(user.impostos_padrao);
-      localStorage.setItem('gestao_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('gestao_user');
     }
   }, [user]);
 
@@ -201,7 +213,12 @@ export default function App() {
   };
 
   // Logout handler
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error('Erro ao encerrar a sess?o no servidor:', error);
+    }
     setUser(null);
     setProdutos([]);
     setBaseProdutos([]);
@@ -209,6 +226,10 @@ export default function App() {
     setActiveTab('pricing');
     showToast('Sessão encerrada com sucesso.', 'info');
   };
+
+  if (isRestoringSession) {
+    return <div className="min-h-screen bg-slate-950" />;
+  }
 
   // If not authenticated, display modern Auth Page
   if (!user) {

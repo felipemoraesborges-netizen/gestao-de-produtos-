@@ -1,12 +1,16 @@
+import base64
+import hashlib
+import hmac
 import io
 import json
 import os
+import secrets
 import sqlite3
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 from defusedxml import ElementTree as ET
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +22,10 @@ import auth
 
 DB_PATH = "banco_notas.db"
 PASTA_XMLS_PROCESSADOS = "xmls_processados"
+AUTH_COOKIE = "gestao_session"
+AUTH_SECRET = os.getenv("AUTH_SECRET_KEY") or secrets.token_hex(32)
+AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "false").lower() == "true"
+CORS_ORIGINS = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000").split(",") if origin.strip()]
 
 app = FastAPI(
     title="Gestão de Produtos API",
@@ -28,10 +36,10 @@ app = FastAPI(
 # CORS middleware para permitir comunicação com o frontend React/Vite
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -294,7 +302,7 @@ def carregar_indice_db(usuario_id: Optional[int] = None) -> List[Dict[str, Any]]
     if usuario_id is not None:
         cursor.execute("""
             SELECT * FROM historico_nfe 
-            WHERE usuario_id = ? OR usuario_id IS NULL 
+            WHERE usuario_id = ?
             ORDER BY data_importacao DESC
         """, (usuario_id,))
     else:
@@ -307,6 +315,36 @@ def carregar_indice_db(usuario_id: Optional[int] = None) -> List[Dict[str, Any]]
 # ==========================================
 # MODELOS PYDANTIC PARA AS REQUISIÇÕES
 # ==========================================
+def criar_token_sessao(usuario_id: int) -> str:
+    expiracao = int(datetime.now().timestamp()) + (60 * 60 * 24 * 7)
+    payload = f"{usuario_id}.{expiracao}".encode("utf-8")
+    assinatura = hmac.new(AUTH_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+    assinatura_texto = base64.urlsafe_b64encode(assinatura).decode("ascii").rstrip("=")
+    return f"{usuario_id}.{expiracao}.{assinatura_texto}"
+
+
+def obter_usuario_autenticado(session_token: Optional[str]) -> Dict[str, Any]:
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Autenticacao necessaria.")
+    try:
+        usuario_id, expiracao, assinatura = session_token.split(".", 2)
+        payload = f"{usuario_id}.{expiracao}".encode("utf-8")
+        esperada = hmac.new(AUTH_SECRET.encode("utf-8"), payload, hashlib.sha256).digest()
+        recebida = base64.urlsafe_b64decode(assinatura + "=" * (-len(assinatura) % 4))
+        if not hmac.compare_digest(esperada, recebida) or int(expiracao) < int(datetime.now().timestamp()):
+            raise ValueError("token invalido")
+        usuario = auth.obter_usuario_por_id(int(usuario_id), DB_PATH)
+    except (ValueError, TypeError, OverflowError, base64.binascii.Error):
+        usuario = None
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Sessao invalida ou expirada.")
+    return usuario
+
+
+def definir_cookie_sessao(response: Response, usuario_id: int) -> None:
+    response.set_cookie(AUTH_COOKIE, criar_token_sessao(usuario_id), httponly=True, secure=AUTH_COOKIE_SECURE, samesite="lax", max_age=60 * 60 * 24 * 7, path="/")
+
+
 class LoginRequest(BaseModel):
     identificador: str
     senha: str
@@ -392,23 +430,25 @@ def register(req: CadastroRequest):
 
 
 @app.post("/api/auth/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, response: Response):
     sucesso, resultado = auth.autenticar_usuario(req.identificador, req.senha)
     if not sucesso:
         raise HTTPException(status_code=401, detail=resultado)
+    definir_cookie_sessao(response, resultado["id"])
     return {"user": resultado}
 
 
+@app.get("/api/auth/me")
 @app.get("/api/auth/me/{usuario_id}")
-def get_me(usuario_id: int):
-    user = auth.obter_usuario_por_id(usuario_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    return {"user": user}
+def get_me(request: Request, usuario_id: Optional[int] = None, gestao_session: Optional[str] = Cookie(None)):
+    return {"user": obter_usuario_autenticado(gestao_session)}
 
 
 @app.put("/api/auth/profile")
-def update_profile(req: PerfilUpdateRequest):
+def update_profile(req: PerfilUpdateRequest, gestao_session: Optional[str] = Cookie(None)):
+    usuario = obter_usuario_autenticado(gestao_session)
+    if req.usuario_id != usuario["id"]:
+        raise HTTPException(status_code=403, detail="Voce nao pode alterar outro usuario.")
     sucesso, msg = auth.atualizar_perfil(
         usuario_id=req.usuario_id,
         nome=req.nome,
@@ -426,7 +466,10 @@ def update_profile(req: PerfilUpdateRequest):
 
 
 @app.post("/api/auth/change-password")
-def change_password(req: AlterarSenhaRequest):
+def change_password(req: AlterarSenhaRequest, gestao_session: Optional[str] = Cookie(None)):
+    usuario = obter_usuario_autenticado(gestao_session)
+    if req.usuario_id != usuario["id"]:
+        raise HTTPException(status_code=403, detail="Voce nao pode alterar outro usuario.")
     sucesso, msg = auth.alterar_senha(
         usuario_id=req.usuario_id,
         senha_atual=req.senha_atual,
@@ -437,6 +480,12 @@ def change_password(req: AlterarSenhaRequest):
     return {"message": msg}
 
 
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(AUTH_COOKIE, path="/")
+    return {"message": "Sessao encerrada."}
+
+
 # ==========================================
 # ENDPOINTS DE NF-E E CÁLCULO DE CUSTOS
 # ==========================================
@@ -444,8 +493,11 @@ def change_password(req: AlterarSenhaRequest):
 async def upload_xmls(
     files: List[UploadFile] = File(...),
     usuario_id: Optional[int] = Form(None),
+    gestao_session: Optional[str] = Cookie(None),
     impostos_selecionados: Optional[str] = Form("[\"ICMS ST\", \"FCP ST\", \"IPI\", \"II\"]"),
 ):
+    usuario = obter_usuario_autenticado(gestao_session)
+    usuario_id = usuario["id"]
     try:
         impostos_ativos = json.loads(impostos_selecionados) if impostos_selecionados else ["ICMS ST", "FCP ST", "IPI", "II"]
     except Exception:
@@ -516,7 +568,8 @@ async def upload_xmls(
 
 
 @app.post("/api/nfe/calculate")
-def recalculate(req: CalculoRequest):
+def recalculate(req: CalculoRequest, gestao_session: Optional[str] = Cookie(None)):
+    obter_usuario_autenticado(gestao_session)
     produtos_calculados = []
     fator_markup = 1 + (req.markup / 100)
 
@@ -601,13 +654,15 @@ def recalculate(req: CalculoRequest):
 
 
 @app.get("/api/nfe/history")
-def get_history(usuario_id: Optional[int] = None):
-    notas = carregar_indice_db(usuario_id)
+def get_history(gestao_session: Optional[str] = Cookie(None)):
+    usuario = obter_usuario_autenticado(gestao_session)
+    notas = carregar_indice_db(usuario["id"])
     return {"notas": notas}
 
 
 @app.post("/api/nfe/export-csv")
-def export_csv(produtos: List[Dict[str, Any]]):
+def export_csv(produtos: List[Dict[str, Any]], gestao_session: Optional[str] = Cookie(None)):
+    obter_usuario_autenticado(gestao_session)
     df = pd.DataFrame(produtos)
     
     # Renomeia colunas para visualização agradável em português no Excel
@@ -654,7 +709,8 @@ def export_csv(produtos: List[Dict[str, Any]]):
 
 
 @app.post("/api/nfe/export-excel")
-def export_excel(produtos: List[Dict[str, Any]]):
+def export_excel(produtos: List[Dict[str, Any]], gestao_session: Optional[str] = Cookie(None)):
+    obter_usuario_autenticado(gestao_session)
     df = pd.DataFrame(produtos)
 
     mapeamento_colunas = {

@@ -50,6 +50,7 @@ export default function FileUpload({ onUpload, isProcessing }) {
         </div>
         {selectedFiles.length > 0 && (
           <button
+            type="button"
             onClick={() => setSelectedFiles([])}
             className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-colors"
           >
@@ -67,6 +68,9 @@ export default function FileUpload({ onUpload, isProcessing }) {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') e.preventDefault();
+        }}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragOver
             ? 'border-brand-500 bg-brand-50/50 scale-[1.005]'
@@ -124,6 +128,7 @@ export default function FileUpload({ onUpload, isProcessing }) {
 
           <div className="mt-4 flex justify-end">
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={isProcessing}
               className="flex items-center gap-2 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-md shadow-brand-500/25 hover:shadow-lg transition-all duration-200 disabled:opacity-50"

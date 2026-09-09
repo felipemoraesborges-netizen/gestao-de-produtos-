@@ -35,6 +35,7 @@ export default function ConfigPanel({
         </div>
 
         <button
+          type="button"
           onClick={onSaveAsDefault}
           disabled={isSavingDefault}
           className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-3.5 py-2 rounded-xl transition-all duration-200 disabled:opacity-50 self-start sm:self-auto"

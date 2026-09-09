@@ -57,3 +57,13 @@ Se desejar editar o código em tempo real:
    - Gráfico de barras comparando os produtos mais lucrativos da nota.
 4. **📁 Histórico de NF-e**:
    - Consulta e filtragem instantânea de todas as notas fiscais importadas pela sua conta.
+
+### Configuracao de seguranca em producao
+
+Defina estas variaveis de ambiente antes de publicar a aplicacao:
+
+- `AUTH_SECRET_KEY`: chave aleatoria longa e persistente para assinar sessoes.
+- `AUTH_COOKIE_SECURE=true`: exige HTTPS para enviar o cookie de sessao.
+- `CORS_ORIGINS`: lista separada por virgulas com as origens oficiais do frontend.
+
+Nunca use uma chave compartilhada ou permita origens desconhecidas em ambiente publico.

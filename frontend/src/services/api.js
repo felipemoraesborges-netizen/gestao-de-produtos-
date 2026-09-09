@@ -1,7 +1,9 @@
 const API_BASE = '/api';
 
+const fetchWithSession = (url, options = {}) => fetch(url, { ...options, credentials: 'include' });
+
 export async function loginUser(identificador, senha) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await fetchWithSession(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ identificador, senha }),
@@ -12,7 +14,7 @@ export async function loginUser(identificador, senha) {
 }
 
 export async function registerUser(userData) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+  const res = await fetchWithSession(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
@@ -22,15 +24,15 @@ export async function registerUser(userData) {
   return data;
 }
 
-export async function getUserProfile(userId) {
-  const res = await fetch(`${API_BASE}/auth/me/${userId}`);
+export async function getUserProfile(_userId) {
+  const res = await fetchWithSession(`${API_BASE}/auth/me`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Erro ao buscar perfil');
   return data.user;
 }
 
 export async function updateUserProfile(profileData) {
-  const res = await fetch(`${API_BASE}/auth/profile`, {
+  const res = await fetchWithSession(`${API_BASE}/auth/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profileData),
@@ -41,7 +43,7 @@ export async function updateUserProfile(profileData) {
 }
 
 export async function changeUserPassword(passwordData) {
-  const res = await fetch(`${API_BASE}/auth/change-password`, {
+  const res = await fetchWithSession(`${API_BASE}/auth/change-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(passwordData),
@@ -61,7 +63,7 @@ export async function uploadXmlFiles(files, userId, selectedTaxes) {
   }
   formData.append('impostos_selecionados', JSON.stringify(selectedTaxes));
 
-  const res = await fetch(`${API_BASE}/nfe/upload`, {
+  const res = await fetchWithSession(`${API_BASE}/nfe/upload`, {
     method: 'POST',
     body: formData,
   });
@@ -71,7 +73,7 @@ export async function uploadXmlFiles(files, userId, selectedTaxes) {
 }
 
 export async function calculateMetrics(calculationData) {
-  const res = await fetch(`${API_BASE}/nfe/calculate`, {
+  const res = await fetchWithSession(`${API_BASE}/nfe/calculate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(calculationData),
@@ -81,16 +83,16 @@ export async function calculateMetrics(calculationData) {
   return data;
 }
 
-export async function getInvoiceHistory(userId) {
-  const url = userId ? `${API_BASE}/nfe/history?usuario_id=${userId}` : `${API_BASE}/nfe/history`;
-  const res = await fetch(url);
+export async function getInvoiceHistory(_userId) {
+  const url = `${API_BASE}/nfe/history`;
+  const res = await fetchWithSession(url);
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Erro ao carregar histórico');
   return data.notas;
 }
 
 export async function downloadCalculatedCsv(produtos) {
-  const res = await fetch(`${API_BASE}/nfe/export-csv`, {
+  const res = await fetchWithSession(`${API_BASE}/nfe/export-csv`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(produtos),
@@ -108,7 +110,7 @@ export async function downloadCalculatedCsv(produtos) {
 }
 
 export async function downloadCalculatedExcel(produtos) {
-  const res = await fetch(`${API_BASE}/nfe/export-excel`, {
+  const res = await fetchWithSession(`${API_BASE}/nfe/export-excel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(produtos),
@@ -123,4 +125,9 @@ export async function downloadCalculatedExcel(produtos) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function logoutUser() {
+  const res = await fetchWithSession(`${API_BASE}/auth/logout`, { method: 'POST' });
+  if (!res.ok) throw new Error('Erro ao encerrar a sess?o');
 }
