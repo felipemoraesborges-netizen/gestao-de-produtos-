@@ -20,8 +20,9 @@ import pandas as pd
 
 import auth
 
-DB_PATH = "banco_notas.db"
-PASTA_XMLS_PROCESSADOS = "xmls_processados"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "banco_notas.db")
+PASTA_XMLS_PROCESSADOS = os.path.join(BASE_DIR, "xmls_processados")
 AUTH_COOKIE = "gestao_session"
 AUTH_SECRET = os.getenv("AUTH_SECRET_KEY") or secrets.token_hex(32)
 AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "false").lower() == "true"

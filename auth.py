@@ -6,7 +6,8 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-DB_PATH = "banco_notas.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "banco_notas.db")
 
 DEFAULT_IMPOSTOS = ["ICMS ST", "FCP ST", "IPI", "II"]
 

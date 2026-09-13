@@ -10,8 +10,9 @@ import streamlit as st
 
 import auth
 
-DB_PATH = "banco_notas.db"
-PASTA_XMLS_PROCESSADOS = "xmls_processados"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "banco_notas.db")
+PASTA_XMLS_PROCESSADOS = os.path.join(BASE_DIR, "xmls_processados")
 
 
 def inicializar_banco() -> None:
