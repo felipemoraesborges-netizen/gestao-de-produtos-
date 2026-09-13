@@ -676,10 +676,6 @@ else:
 
                 if chave_acesso:
                     nome_salvo = nome_arquivo_padronizado(chave_acesso, metadados_nota)
-                    caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nome_salvo)
-                    with open(caminho_salvo, "wb") as arquivo_salvo:
-                        arquivo_salvo.write(conteudo_bytes)
-
                     nova_nota = {
                         "chave_acesso": chave_acesso,
                         "numero": metadados_nota.get("numero", ""),
@@ -692,6 +688,7 @@ else:
                         "arquivo_salvo": nome_salvo,
                         "data_importacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "usuario_id": id_user,
+                        "_conteudo_bytes": conteudo_bytes,
                     }
                     novas_notas.append(nova_nota)
 
@@ -712,9 +709,6 @@ else:
             produtos_extraidos, notas_para_salvar, avisos_gerados, erros_gerados = processar_arquivos_upload(
                 arquivos_para_cache, impostos_selecionados, indice, usuario_logado["id"]
             )
-
-            for nota in notas_para_salvar:
-                salvar_nota(nota)
 
             for aviso in avisos_gerados:
                 st.warning(aviso)
@@ -773,14 +767,30 @@ else:
                 st.subheader("📋 3. Tabela Detalhada de Custos e Formação de Preço")
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
-                # Botão de exportação
-                csv_data = df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
-                st.download_button(
-                    label="📥 Exportar Tabela para Excel (CSV)",
-                    data=csv_data,
-                    file_name=f"precificacao_produtos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                    mime="text/csv",
-                )
+                col_finalize, col_export = st.columns([1, 1])
+                with col_finalize:
+                    chave_nota = ",".join(sorted(n.get("chave_acesso", "") for n in notas_para_salvar))
+                    if st.button("Finalizar NF-e", use_container_width=True, key=f"btn_finalizar_nfe_{chave_nota or 'pendente'}"):
+                        for nota in notas_para_salvar:
+                            conteudo_xml = nota.get("_conteudo_bytes")
+                            if conteudo_xml is None:
+                                continue
+                            caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nota["arquivo_salvo"])
+                            with open(caminho_salvo, "wb") as arquivo_salvo:
+                                arquivo_salvo.write(conteudo_xml)
+                            salvar_nota({k: v for k, v in nota.items() if not k.startswith("_")})
+                        st.success("NF-e finalizada e enviada para os arquivos arquivados.")
+                        st.rerun()
+
+                with col_export:
+                    csv_data = df.to_csv(index=False, sep=";", decimal=",").encode("utf-8-sig")
+                    st.download_button(
+                        label="Exportar Tabela para Excel (CSV)",
+                        data=csv_data,
+                        file_name=f"precificacao_produtos_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
 
     # ==========================================
     # ABA 2: HISTÓRICO DE NF-E
