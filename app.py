@@ -421,11 +421,21 @@ st.markdown("""
     section[data-testid="stSidebar"] textarea,
     section[data-testid="stSidebar"] [data-baseweb="input"] input,
     section[data-testid="stSidebar"] [data-baseweb="base-input"] input,
-    section[data-testid="stSidebar"] [data-testid="stNumberInput"] input {
-        background-color: rgba(255, 255, 255, 0.12) !important;
-        color: #FFFFFF !important;
-        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    section[data-testid="stSidebar"] [data-testid="stNumberInput"] input,
+    section[data-testid="stSidebar"] input[type="number"] {
+        background-color: #FFFFFF !important;
+        color: #0E2A47 !important;
+        -webkit-text-fill-color: #0E2A47 !important;
+        caret-color: #0E2A47 !important;
+        border: 1px solid rgba(255, 255, 255, 0.55) !important;
         border-radius: 6px !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stNumberInput"] input:focus,
+    section[data-testid="stSidebar"] input[type="number"]:focus {
+        color: #0E2A47 !important;
+        -webkit-text-fill-color: #0E2A47 !important;
+        background-color: #FFFFFF !important;
+        outline: 2px solid #66B3FF !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="input"],
     section[data-testid="stSidebar"] [data-baseweb="base-input"],
@@ -440,7 +450,7 @@ st.markdown("""
         color: #FFFFFF !important;
         border: 1px solid rgba(255,255,255,0.35) !important;
     }
-    section[data-testid="stSidebar"] input::placeholder { color: rgba(255,255,255,0.45) !important; }
+    section[data-testid="stSidebar"] input::placeholder { color: #5B7087 !important; opacity: 1 !important; }
     section[data-testid="stSidebar"] [data-baseweb="select"] > div,
     section[data-testid="stSidebar"] [data-baseweb="select"] input {
         background-color: rgba(255, 255, 255, 0.12) !important;
