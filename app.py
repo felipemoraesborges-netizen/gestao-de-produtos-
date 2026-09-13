@@ -413,7 +413,15 @@ st.markdown("""
     h2, h3 { color: #1B4F8C; font-weight: 600; margin-top: 1.8rem; }
     [data-testid="stCaptionContainer"], .stCaption, small { color: #33475B !important; opacity: 1 !important; font-size: 0.92rem !important; }
     section[data-testid="stSidebar"] { background-color: #0E2A47; }
-    section[data-testid="stSidebar"] * { color: #FFFFFF !important; opacity: 1 !important; }
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] span:not(input span) {
+        color: #FFFFFF !important;
+        opacity: 1 !important;
+    }
     section[data-testid="stSidebar"] [data-testid="stCaptionContainer"], section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small { color: #C7D6E8 !important; opacity: 1 !important; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FFFFFF !important; border-bottom: none; }
     section[data-testid="stSidebar"] .stCheckbox { background-color: rgba(255, 255, 255, 0.06); border-radius: 6px; padding: 2px 6px; margin-bottom: 2px; }
@@ -427,6 +435,9 @@ st.markdown("""
         color: #0E2A47 !important;
         -webkit-text-fill-color: #0E2A47 !important;
         caret-color: #0E2A47 !important;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        opacity: 1 !important;
         border: 1px solid rgba(255, 255, 255, 0.55) !important;
         border-radius: 6px !important;
     }
@@ -450,7 +461,11 @@ st.markdown("""
         color: #FFFFFF !important;
         border: 1px solid rgba(255,255,255,0.35) !important;
     }
-    section[data-testid="stSidebar"] input::placeholder { color: #5B7087 !important; opacity: 1 !important; }
+    section[data-testid="stSidebar"] input::placeholder {
+        color: #5B7087 !important;
+        -webkit-text-fill-color: #5B7087 !important;
+        opacity: 1 !important;
+    }
     section[data-testid="stSidebar"] [data-baseweb="select"] > div,
     section[data-testid="stSidebar"] [data-baseweb="select"] input {
         background-color: rgba(255, 255, 255, 0.12) !important;
