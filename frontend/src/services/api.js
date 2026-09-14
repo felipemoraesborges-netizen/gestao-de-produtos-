@@ -101,8 +101,24 @@ export async function registerUser(userData) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Erro ao criar conta');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    let errorMsg = 'Erro ao criar conta';
+    if (typeof data.detail === 'string') {
+      errorMsg = data.detail;
+    } else if (Array.isArray(data.detail)) {
+      errorMsg = data.detail.map((err) => {
+        const field = err.loc ? err.loc[err.loc.length - 1] : '';
+        if (field === 'usuario') return 'Usuário inválido: use apenas letras (sem acentos), números, ponto, traço ou underline';
+        if (field === 'senha') return 'A senha deve ter no mínimo 10 caracteres';
+        if (field === 'email') return 'Formato de e-mail inválido';
+        return err.msg || 'Campo inválido';
+      }).join('. ');
+    } else if (data.message) {
+      errorMsg = data.message;
+    }
+    throw new Error(errorMsg);
+  }
   return data;
 }
 
