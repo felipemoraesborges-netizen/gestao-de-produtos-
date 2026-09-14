@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import sqlite3
+import math
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
@@ -15,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openpyxl.styles import Alignment, Font, PatternFill
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 import pandas as pd
 
 import auth
@@ -48,6 +49,9 @@ def inicializar_banco() -> None:
     os.makedirs(PASTA_XMLS_PROCESSADOS, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS historico_nfe (
             chave_acesso TEXT PRIMARY KEY,
@@ -63,6 +67,8 @@ def inicializar_banco() -> None:
             usuario_id INTEGER
         )
     """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_usuario_data ON historico_nfe(usuario_id, data_importacao DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_chave_usuario ON historico_nfe(chave_acesso, usuario_id)")
     cursor.execute("PRAGMA table_info(historico_nfe)")
     colunas = [col[1] for col in cursor.fetchall()]
     if "usuario_id" not in colunas:
@@ -287,7 +293,7 @@ def salvar_nota_db(dados: Dict[str, Any]) -> None:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO historico_nfe 
+        INSERT OR IGNORE INTO historico_nfe
         (chave_acesso, numero, serie, data_emissao, fornecedor, cnpj_emit, valor_total, arquivo_original, arquivo_salvo, data_importacao, usuario_id)
         VALUES (:chave_acesso, :numero, :serie, :data_emissao, :fornecedor, :cnpj_emit, :valor_total, :arquivo_original, :arquivo_salvo, :data_importacao, :usuario_id)
     """, dados)
@@ -342,39 +348,72 @@ def obter_usuario_autenticado(session_token: Optional[str]) -> Dict[str, Any]:
     return usuario
 
 
+def exigir_nivel(usuario: Dict[str, Any], *niveis: str) -> None:
+    if usuario.get("nivel_acesso", "operador") not in niveis:
+        raise HTTPException(status_code=403, detail="Seu nível de acesso não permite esta operação.")
+
+
 def definir_cookie_sessao(response: Response, usuario_id: int) -> None:
     response.set_cookie(AUTH_COOKIE, criar_token_sessao(usuario_id), httponly=True, secure=AUTH_COOKIE_SECURE, samesite="lax", max_age=60 * 60 * 24 * 7, path="/")
 
 
 class LoginRequest(BaseModel):
-    identificador: str
-    senha: str
+    identificador: str = Field(min_length=1, max_length=254)
+    senha: str = Field(min_length=1, max_length=128)
 
 
 class CadastroRequest(BaseModel):
-    usuario: str
-    nome: str
-    email: str
-    senha: str
-    empresa: Optional[str] = ""
-    cargo: Optional[str] = ""
+    usuario: str = Field(min_length=3, max_length=50)
+    nome: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    senha: str = Field(min_length=6, max_length=128)
+    empresa: Optional[str] = Field(default="", max_length=160)
+    cargo: Optional[str] = Field(default="", max_length=100)
+
+    @field_validator("usuario")
+    @classmethod
+    def validar_usuario(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not value.replace(".", "").replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Usuário inválido.")
+        return value
 
 
 class PerfilUpdateRequest(BaseModel):
-    usuario_id: int
-    nome: str
-    email: str
-    empresa: Optional[str] = ""
-    cargo: Optional[str] = ""
-    markup_padrao: float = 60.0
-    custo_adicional_padrao: float = 0.0
-    impostos_padrao: List[str] = ["ICMS ST", "FCP ST", "IPI", "II"]
+    usuario_id: int = Field(gt=0)
+    nome: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    empresa: Optional[str] = Field(default="", max_length=160)
+    cargo: Optional[str] = Field(default="", max_length=100)
+    markup_padrao: float = Field(default=60.0, ge=0, le=1000)
+    custo_adicional_padrao: float = Field(default=0.0, ge=0, le=1000000)
+    impostos_padrao: List[str] = Field(default_factory=lambda: ["ICMS ST", "FCP ST", "IPI", "II"], max_length=8)
+
+    @field_validator("impostos_padrao")
+    @classmethod
+    def validar_impostos(cls, values: List[str]) -> List[str]:
+        permitidos = {"ICMS", "ICMS ST", "FCP", "FCP ST", "IPI", "II", "PIS", "COFINS"}
+        if any(value not in permitidos for value in values) or len(set(values)) != len(values):
+            raise ValueError("Lista de impostos inválida.")
+        return values
 
 
 class AlterarSenhaRequest(BaseModel):
-    usuario_id: int
-    senha_atual: str
-    nova_senha: str
+    usuario_id: int = Field(gt=0)
+    senha_atual: str = Field(min_length=1, max_length=128)
+    nova_senha: str = Field(min_length=6, max_length=128)
+
+
+class NivelAcessoRequest(BaseModel):
+    nivel_acesso: str
+
+    @field_validator("nivel_acesso")
+    @classmethod
+    def validar_nivel(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value not in auth.NIVEIS_ACESSO:
+            raise ValueError("Nível de acesso inválido.")
+        return value
 
 
 class ProdutoItem(BaseModel):
@@ -405,11 +444,32 @@ class ProdutoItem(BaseModel):
 
 
 class CalculoRequest(BaseModel):
-    produtos: List[Dict[str, Any]]
-    markup: float
-    custo_adicional_unitario: float
-    impostos_selecionados: List[str]
+    produtos: List[Dict[str, Any]] = Field(min_length=1, max_length=10000)
+    markup: float = Field(ge=0, le=1000)
+    custo_adicional_unitario: float = Field(ge=0, le=1000000)
+    impostos_selecionados: List[str] = Field(max_length=8)
     unidades_por_embalagem: Dict[str, float]
+
+    @model_validator(mode="after")
+    def validar_produtos(self):
+        campos_numericos = (
+            "quantidade", "valor_produtos", "frete", "seguro", "desconto",
+            "outras_despesas", "icms", "icms_st", "fcp", "fcp_st", "ipi", "ii",
+            "pis", "cofins",
+        )
+        for item in self.produtos:
+            if not item.get("id") or not item.get("produto"):
+                raise ValueError("Produto sem identificador ou descrição.")
+            for campo in campos_numericos:
+                valor = item.get(campo, 0)
+                if not isinstance(valor, (int, float)) or not math.isfinite(float(valor)) or float(valor) < 0:
+                    raise ValueError(f"Valor inválido no campo {campo}.")
+        if any(
+            not isinstance(valor, (int, float)) or not math.isfinite(float(valor)) or valor <= 0
+            for valor in self.unidades_por_embalagem.values()
+        ):
+            raise ValueError("Unidades por embalagem devem ser maiores que zero.")
+        return self
 
 
 # ==========================================
@@ -443,6 +503,42 @@ def login(req: LoginRequest, response: Response):
 @app.get("/api/auth/me/{usuario_id}")
 def get_me(request: Request, usuario_id: Optional[int] = None, gestao_session: Optional[str] = Cookie(None)):
     return {"user": obter_usuario_autenticado(gestao_session)}
+
+
+@app.get("/api/auth/users")
+def list_users(gestao_session: Optional[str] = Cookie(None)):
+    usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("""
+        SELECT id, usuario, nome, email, empresa, cargo, nivel_acesso, criado_em, ultimo_login
+        FROM usuarios ORDER BY nome COLLATE NOCASE
+    """).fetchall()
+    conn.close()
+    return {"usuarios": [dict(row) for row in rows]}
+
+
+@app.put("/api/auth/users/{usuario_id}/nivel")
+def update_user_level(
+    usuario_id: int,
+    req: NivelAcessoRequest,
+    gestao_session: Optional[str] = Cookie(None),
+):
+    usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin")
+    if usuario_id == usuario["id"] and req.nivel_acesso != "admin":
+        raise HTTPException(status_code=400, detail="O administrador não pode remover o próprio acesso.")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute(
+        "UPDATE usuarios SET nivel_acesso = ? WHERE id = ?",
+        (req.nivel_acesso, usuario_id),
+    )
+    conn.commit()
+    conn.close()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    return {"message": "Nível de acesso atualizado."}
 
 
 @app.put("/api/auth/profile")
@@ -498,6 +594,7 @@ async def upload_xmls(
     impostos_selecionados: Optional[str] = Form("[\"ICMS ST\", \"FCP ST\", \"IPI\", \"II\"]"),
 ):
     usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin", "operador")
     usuario_id = usuario["id"]
     try:
         impostos_ativos = json.loads(impostos_selecionados) if impostos_selecionados else ["ICMS ST", "FCP ST", "IPI", "II"]
@@ -511,7 +608,13 @@ async def upload_xmls(
     notas_processadas = []
 
     for file in files:
+        if not file.filename or not file.filename.lower().endswith(".xml"):
+            erros.append(f"Arquivo inválido: {file.filename or 'sem nome'}. Envie apenas XML.")
+            continue
         conteudo_bytes = await file.read()
+        if len(conteudo_bytes) > 10 * 1024 * 1024:
+            erros.append(f"O arquivo {file.filename} excede o limite de 10 MB.")
+            continue
         try:
             root = ET.fromstring(conteudo_bytes)
         except Exception as erro:
@@ -570,7 +673,11 @@ async def upload_xmls(
 
 @app.post("/api/nfe/calculate")
 def recalculate(req: CalculoRequest, gestao_session: Optional[str] = Cookie(None)):
-    obter_usuario_autenticado(gestao_session)
+    usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin", "operador")
+    impostos_validos = {"ICMS", "ICMS ST", "FCP", "FCP ST", "IPI", "II", "PIS", "COFINS"}
+    if any(imposto not in impostos_validos for imposto in req.impostos_selecionados):
+        raise HTTPException(status_code=422, detail="Lista de impostos inválida.")
     produtos_calculados = []
     fator_markup = 1 + (req.markup / 100)
 
@@ -586,6 +693,9 @@ def recalculate(req: CalculoRequest, gestao_session: Optional[str] = Cookie(None
         seguro = float(item.get("seguro", 0.0))
         desconto = float(item.get("desconto", 0.0))
         outras = float(item.get("outras_despesas", 0.0))
+        valores = [unidades_embalagem, qtd_original, valor_prod, frete, seguro, desconto, outras]
+        if any(not math.isfinite(valor) or valor < 0 for valor in valores):
+            raise HTTPException(status_code=422, detail="Produto contém valores numéricos inválidos.")
 
         # Impostos detalhados
         impostos_map = {
@@ -663,7 +773,8 @@ def get_history(gestao_session: Optional[str] = Cookie(None)):
 
 @app.post("/api/nfe/export-csv")
 def export_csv(produtos: List[Dict[str, Any]], gestao_session: Optional[str] = Cookie(None)):
-    obter_usuario_autenticado(gestao_session)
+    usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin", "operador")
     df = pd.DataFrame(produtos)
     
     # Renomeia colunas para visualização agradável em português no Excel
@@ -711,7 +822,8 @@ def export_csv(produtos: List[Dict[str, Any]], gestao_session: Optional[str] = C
 
 @app.post("/api/nfe/export-excel")
 def export_excel(produtos: List[Dict[str, Any]], gestao_session: Optional[str] = Cookie(None)):
-    obter_usuario_autenticado(gestao_session)
+    usuario = obter_usuario_autenticado(gestao_session)
+    exigir_nivel(usuario, "admin", "operador")
     df = pd.DataFrame(produtos)
 
     mapeamento_colunas = {

@@ -10,6 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "banco_notas.db")
 
 DEFAULT_IMPOSTOS = ["ICMS ST", "FCP ST", "IPI", "II"]
+NIVEIS_ACESSO = {"admin", "operador", "consulta"}
 
 
 def inicializar_tabela_usuarios(db_path: str = DB_PATH) -> None:
@@ -29,10 +30,23 @@ def inicializar_tabela_usuarios(db_path: str = DB_PATH) -> None:
             markup_padrao REAL DEFAULT 60.0,
             custo_adicional_padrao REAL DEFAULT 0.0,
             impostos_padrao TEXT DEFAULT '["ICMS ST", "FCP ST", "IPI", "II"]',
+            nivel_acesso TEXT NOT NULL DEFAULT 'operador',
             criado_em TEXT NOT NULL,
             ultimo_login TEXT
         )
     """)
+    cursor.execute("PRAGMA table_info(usuarios)")
+    colunas = {col[1] for col in cursor.fetchall()}
+    if "nivel_acesso" not in colunas:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN nivel_acesso TEXT NOT NULL DEFAULT 'operador'")
+    admin_usuario = os.getenv("ADMIN_USER", "").strip().lower()
+    if admin_usuario:
+        cursor.execute(
+            "UPDATE usuarios SET nivel_acesso = 'admin' WHERE lower(usuario) = ?",
+            (admin_usuario,),
+        )
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_usuario_lower ON usuarios(usuario COLLATE NOCASE)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_email_lower ON usuarios(email COLLATE NOCASE)")
     conn.commit()
     conn.close()
 
@@ -79,6 +93,12 @@ def cadastrar_usuario(
 
     if len(senha) < 6:
         return False, "A senha deve conter no mínimo 6 caracteres."
+    if len(senha) > 128:
+        return False, "A senha não pode conter mais de 128 caracteres."
+    if len(usuario) > 50 or not usuario.replace(".", "").replace("_", "").replace("-", "").isalnum():
+        return False, "O usuário deve conter apenas letras, números, ponto, hífen ou sublinhado."
+    if len(nome) > 120 or len(email) > 254:
+        return False, "Nome ou e-mail excede o limite permitido."
 
     if impostos_padrao is None:
         impostos_padrao = DEFAULT_IMPOSTOS

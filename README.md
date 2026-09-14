@@ -65,5 +65,16 @@ Defina estas variaveis de ambiente antes de publicar a aplicacao:
 - `AUTH_SECRET_KEY`: chave aleatoria longa e persistente para assinar sessoes.
 - `AUTH_COOKIE_SECURE=true`: exige HTTPS para enviar o cookie de sessao.
 - `CORS_ORIGINS`: lista separada por virgulas com as origens oficiais do frontend.
+- `ADMIN_USER`: nome de usuário que deve receber o nível `admin` ao iniciar a aplicação.
 
 Nunca use uma chave compartilhada ou permita origens desconhecidas em ambiente publico.
+
+### Níveis de acesso
+
+- `admin`: gerencia usuários e níveis de acesso, além de usar todos os recursos.
+- `operador`: importa XMLs, recalcula preços, consulta histórico e exporta relatórios.
+- `consulta`: consulta histórico e perfil, sem permissão para alterar ou exportar dados.
+
+Novos cadastros começam como `operador`. Para promover o primeiro administrador,
+defina `ADMIN_USER` antes de iniciar o backend. O valor deve ser persistente no
+ambiente de produção.

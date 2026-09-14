@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { ArrowRight, FileSpreadsheet, ShieldCheck, Sparkles, UploadCloud } from 'lucide-react';
 import Navbar from './components/Navbar';
 import MetricCards from './components/MetricCards';
 import FileUpload from './components/FileUpload';
@@ -42,6 +43,7 @@ export default function App() {
   const [custoAdicional, setCustoAdicional] = useState(0.0);
   const [selectedTaxes, setSelectedTaxes] = useState(['ICMS ST', 'FCP ST', 'IPI', 'II']);
   const [unidadesPorEmbalagem, setUnidadesPorEmbalagem] = useState({});
+  const podeEditarPrecos = ['admin', 'operador'].includes(user?.nivel_acesso || 'operador');
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -228,7 +230,19 @@ export default function App() {
   };
 
   if (isRestoringSession) {
-    return <div className="min-h-screen bg-slate-950" />;
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4 text-white">
+          <div className="w-12 h-12 rounded-2xl bg-brand-600/20 border border-brand-400/30 flex items-center justify-center">
+            <Sparkles className="w-6 h-6 text-brand-300 animate-pulse" />
+          </div>
+          <div className="text-center">
+            <p className="font-bold">Carregando seu ambiente</p>
+            <p className="text-xs text-slate-400 mt-1">Validando sua sessão com segurança...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // If not authenticated, display modern Auth Page
@@ -254,16 +268,61 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1">
         {activeTab === 'pricing' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 via-slate-900 to-brand-900 px-6 py-8 sm:px-10 sm:py-10 mb-6 shadow-xl shadow-slate-300/40">
+              <div className="absolute -right-16 -top-24 w-72 h-72 rounded-full bg-brand-500/20 blur-3xl" />
+              <div className="absolute -bottom-32 left-1/3 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl" />
+              <div className="relative max-w-3xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-brand-300/25 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-brand-200">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Central de precificação
+                </div>
+                <h1 className="mt-4 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                  Olá, {user.nome?.split(' ')[0] || 'seja bem-vindo'}.
+                  <span className="block text-brand-200">Vamos transformar seus XMLs em decisões melhores.</span>
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
+                  Importe suas notas fiscais, ajuste suas margens e acompanhe custos e lucros em um só lugar.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3 text-xs font-semibold text-slate-200">
+                  <span className="inline-flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-emerald-300" />Dados protegidos por sessão</span>
+                  <span className="inline-flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-cyan-300" />Exportação para Excel</span>
+                </div>
+              </div>
+            </section>
             
             {/* Metric Summary Cards */}
             {resumo && <MetricCards resumo={resumo} />}
 
             {/* XML Upload Box */}
-            <FileUpload onUpload={handleUploadXmls} isProcessing={isProcessing} />
+            {podeEditarPrecos ? (
+              <FileUpload onUpload={handleUploadXmls} isProcessing={isProcessing} />
+            ) : (
+              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+                Seu perfil é somente consulta. Você pode acompanhar o histórico, mas não pode importar ou recalcular produtos.
+              </div>
+            )}
+
+            {!produtos.length && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {[
+                  { icon: UploadCloud, title: '1. Importe seus XMLs', text: 'Envie uma ou várias notas fiscais de uma vez.' },
+                  { icon: Sparkles, title: '2. Ajuste sua margem', text: 'Teste markup, custos adicionais e impostos em tempo real.' },
+                  { icon: ArrowRight, title: '3. Tome decisões', text: 'Compare resultados e exporte uma planilha pronta.' },
+                ].map(({ icon: Icon, title, text }) => (
+                  <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-sm font-bold text-slate-800">{title}</h2>
+                    <p className="text-xs leading-5 text-slate-500 mt-1">{text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Configuration Controls */}
-            {produtos.length > 0 && (
+            {produtos.length > 0 && podeEditarPrecos && (
               <ConfigPanel
                 markup={markup}
                 setMarkup={setMarkup}

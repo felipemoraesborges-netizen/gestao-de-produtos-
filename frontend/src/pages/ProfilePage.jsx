@@ -114,6 +114,9 @@ export default function ProfilePage({ user, onUserUpdated, showToast }) {
             <h2 className="text-lg font-bold text-slate-800">{user.nome}</h2>
             <p className="text-xs text-brand-600 font-semibold font-mono">@{user.usuario}</p>
             <p className="text-xs text-slate-400 mt-1">{user.cargo || 'Gestor'} • {user.empresa || 'Empresa'}</p>
+            <span className="inline-flex mt-3 rounded-full bg-brand-50 border border-brand-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-brand-700">
+              Nível: {user.nivel_acesso || 'operador'}
+            </span>
 
             <div className="mt-6 pt-4 border-t border-slate-100 text-left text-xs space-y-2">
               <div className="flex justify-between text-slate-500">
