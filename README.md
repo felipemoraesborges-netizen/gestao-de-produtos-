@@ -52,8 +52,19 @@ Se desejar editar o código em tempo real:
    - Recálculo instantâneo ao ajustar sliders de markup, custos extras ou impostos sem recarregar a tela.
    - Tabela interativa com busca, ordenação por colunas, edição inline de unidades por embalagem e detalhes fiscais expandíveis por produto.
    - Exportação direta para CSV/Excel com formatação brasileira.
-3. **📊 Dashboard Analítico**:
-   - Gráfico de rosca para composição dos custos (Produtos vs Impostos vs Frete vs Despesas).
-   - Gráfico de barras comparando os produtos mais lucrativos da nota.
-4. **📁 Histórico de NF-e**:
+3. **📊 Dashboard Analítico & Relatórios**:
+   - Gráficos de rosca para composição dos custos e distribuição da saúde do estoque.
+   - Gráfico de barras comparando os produtos mais rentáveis e produtos com maior capital imobilizado.
+   - Relatórios executivos com projeção de faturamento e lucro potencial em estoque.
+   - Relatório de Necessidade de Reposição e Compras com exportação em CSV e visualização para impressão/PDF.
+4. **📦 Gestão de Estoque & Alertas de Reposição**:
+   - Catálogo de estoque com controle de saldo atual e estoque mínimo de segurança.
+   - Alertas dinâmicos e visuais para produtos com estoque baixo ou esgotados.
+   - Registro de movimentações (Entrada, Saída e Ajuste de Balanço) com justificativa e histórico por item.
+   - Botão **"Incorporar ao Estoque"** com 1 clique diretamente da tabela de precificação de NF-e.
+5. **🛡️ Trilha de Auditoria & Compliance**:
+   - Monitoramento contínuo de todas as ações de usuários (logins, cadastros, importações, movimentações de estoque, alterações cadastrais e exportações).
+   - Registro de endereço IP, timestamp, usuário e detalhes da operação.
+   - Filtros instantâneos por categoria de evento e exportação da trilha em formato CSV.
+6. **📁 Histórico de NF-e**:
    - Consulta e filtragem instantânea de todas as notas fiscais importadas pela sua conta.

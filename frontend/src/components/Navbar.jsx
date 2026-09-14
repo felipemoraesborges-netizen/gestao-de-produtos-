@@ -1,7 +1,19 @@
 import React from 'react';
-import { Package, BarChart3, FileText, User, LogOut, Sparkles, Building2 } from 'lucide-react';
+import {
+  Package,
+  BarChart3,
+  FileText,
+  User,
+  LogOut,
+  Sparkles,
+  Building2,
+  Boxes,
+  ShieldCheck,
+  FileSpreadsheet,
+  AlertTriangle,
+} from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
+export default function Navbar({ activeTab, setActiveTab, user, onLogout, alertaEstoqueCount = 0 }) {
   return (
     <header className="sticky top-0 z-40 bg-navy-900/95 backdrop-blur-md border-b border-white/10 shadow-lg text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -21,15 +33,15 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
                   PRO
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Precificação Inteligente & NF-e</p>
+              <p className="text-[11px] text-slate-400 font-medium">Estoque, Precificação & Auditoria</p>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          {/* Navigation Tabs (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
             <button
               onClick={() => setActiveTab('pricing')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                 activeTab === 'pricing'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -38,31 +50,63 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
               <Sparkles className="w-3.5 h-3.5" />
               Precificação
             </button>
+
             <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                activeTab === 'dashboard'
+              onClick={() => setActiveTab('inventory')}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                activeTab === 'inventory'
+                  ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Boxes className="w-3.5 h-3.5" />
+              Estoque
+              {alertaEstoqueCount > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-slate-900 animate-pulse">
+                  {alertaEstoqueCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                activeTab === 'reports'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
               }`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              Dashboard
+              Relatórios & Análise
             </button>
+
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                 activeTab === 'history'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              Histórico de NF-e
+              Histórico NF-e
             </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                activeTab === 'audit'
+                  ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Auditoria
+            </button>
+
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                 activeTab === 'profile'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -105,34 +149,55 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
         </div>
 
         {/* Mobile Tab Bar */}
-        <div className="flex md:hidden items-center justify-between pb-3 gap-1 overflow-x-auto">
+        <div className="flex lg:hidden items-center justify-between pb-3 gap-1 overflow-x-auto text-xs">
           <button
             onClick={() => setActiveTab('pricing')}
-            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-center ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
               activeTab === 'pricing' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
             Precificação
           </button>
           <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-center ${
-              activeTab === 'dashboard' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
+            onClick={() => setActiveTab('inventory')}
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap flex items-center gap-1 ${
+              activeTab === 'inventory' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Dashboard
+            Estoque
+            {alertaEstoqueCount > 0 && (
+              <span className="px-1 rounded-full text-[9px] font-bold bg-amber-500 text-slate-900">
+                {alertaEstoqueCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+              activeTab === 'reports' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Relatórios
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-center ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
               activeTab === 'history' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
             Histórico
           </button>
           <button
+            onClick={() => setActiveTab('audit')}
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+              activeTab === 'audit' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Auditoria
+          </button>
+          <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium text-center ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
               activeTab === 'profile' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -143,3 +208,4 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout }) {
     </header>
   );
 }
+

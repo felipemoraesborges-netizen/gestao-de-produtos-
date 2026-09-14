@@ -16,6 +16,7 @@ export default function ProductTable({
   unidadesPorEmbalagem,
   onUpdateUnidade,
   onExportCsv,
+  onIncorporarEstoque,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState('produto');
@@ -75,7 +76,7 @@ export default function ProductTable({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Search Bar */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -84,9 +85,20 @@ export default function ProductTable({
               placeholder="Buscar por código ou descrição..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-56 sm:w-64 transition-all"
+              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-48 sm:w-56 transition-all"
             />
           </div>
+
+          {/* Incorporar ao Estoque */}
+          {onIncorporarEstoque && (
+            <button
+              onClick={onIncorporarEstoque}
+              className="flex items-center gap-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all duration-200"
+            >
+              <Package className="w-4 h-4" />
+              Incorporar ao Estoque
+            </button>
+          )}
 
           {/* Export Button */}
           <button

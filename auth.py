@@ -1,19 +1,31 @@
-import hashlib
 import json
 import os
-import secrets
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-DB_PATH = "banco_notas.db"
+import security
 
+DB_PATH = security.DB_PATH
 DEFAULT_IMPOSTOS = ["ICMS ST", "FCP ST", "IPI", "II"]
+
+# Evita reabrir uma conexão extra + refazer CREATE TABLE/INDEX a cada chamada
+# de cadastrar_usuario/autenticar_usuario/etc — isso só precisa rodar uma vez
+# por processo/caminho de banco, e era uma das causas dos locks concorrentes.
+_tabelas_prontas: set = set()
+
+
+def _garantir_tabela_usuarios(db_path: str = DB_PATH) -> None:
+    """Garante que a tabela de usuários existe, executando a inicialização só uma vez."""
+    if db_path in _tabelas_prontas:
+        return
+    inicializar_tabela_usuarios(db_path)
+    _tabelas_prontas.add(db_path)
 
 
 def inicializar_tabela_usuarios(db_path: str = DB_PATH) -> None:
-    """Cria a tabela de usuários se não existir."""
-    conn = sqlite3.connect(db_path)
+    """Cria a tabela de usuários com índices apropriados se não existir."""
+    conn = security.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -32,27 +44,10 @@ def inicializar_tabela_usuarios(db_path: str = DB_PATH) -> None:
             ultimo_login TEXT
         )
     """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_usuario ON usuarios(lower(usuario))")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(lower(email))")
     conn.commit()
     conn.close()
-
-
-def gerar_hash_senha(senha: str, salt: Optional[str] = None) -> Tuple[str, str]:
-    """Gera hash PBKDF2-HMAC-SHA256 seguro para a senha com salt aleatório."""
-    if not salt:
-        salt = secrets.token_hex(16)
-    hash_bytes = hashlib.pbkdf2_hmac(
-        "sha256",
-        senha.encode("utf-8"),
-        salt.encode("utf-8"),
-        100_000,
-    )
-    return hash_bytes.hex(), salt
-
-
-def verificar_senha(senha: str, senha_hash: str, salt: str) -> bool:
-    """Verifica se a senha fornecida corresponde ao hash armazenado."""
-    novo_hash, _ = gerar_hash_senha(senha, salt)
-    return secrets.compare_digest(novo_hash, senha_hash)
 
 
 def cadastrar_usuario(
@@ -67,8 +62,8 @@ def cadastrar_usuario(
     impostos_padrao: Optional[List[str]] = None,
     db_path: str = DB_PATH,
 ) -> Tuple[bool, str]:
-    """Cadastra um novo usuário no banco de dados."""
-    inicializar_tabela_usuarios(db_path)
+    """Cadastra um novo usuário no banco de dados com validação rigorosa de senha."""
+    _garantir_tabela_usuarios(db_path)
     usuario = usuario.strip().lower()
     nome = nome.strip()
     email = email.strip().lower()
@@ -76,18 +71,21 @@ def cadastrar_usuario(
     if not usuario or not nome or not email or not senha:
         return False, "Todos os campos obrigatórios devem ser preenchidos."
 
-    if len(senha) < 6:
-        return False, "A senha deve conter no mínimo 6 caracteres."
+    # Valida política de senha OWASP
+    valida, msg_senha = security.validar_politica_senha(senha)
+    if not valida:
+        return False, msg_senha
 
     if impostos_padrao is None:
         impostos_padrao = DEFAULT_IMPOSTOS
 
-    senha_hash, salt = gerar_hash_senha(senha)
-    criado_em = datetime.now().strftime("%d/%m/%Y %H:%M")
+    # Gera hash usando Argon2id (ou PBKDF2 se indisponível)
+    senha_hash, salt = security.gerar_hash_senha_seguro(senha)
+    criado_em = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     impostos_json = json.dumps(impostos_padrao)
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn = security.get_db_connection(db_path)
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO usuarios (
@@ -95,7 +93,7 @@ def cadastrar_usuario(
                 markup_padrao, custo_adicional_padrao, impostos_padrao, criado_em, ultimo_login
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            usuario, nome, email, senha_hash, salt, empresa, cargo,
+            usuario, nome, email, senha_hash, salt, empresa.strip()[:100], cargo.strip()[:100],
             float(markup_padrao), float(custo_adicional_padrao), impostos_json, criado_em, None
         ))
         conn.commit()
@@ -109,7 +107,7 @@ def cadastrar_usuario(
             return False, "E-mail já cadastrado."
         return False, "Usuário ou e-mail já cadastrado no sistema."
     except Exception as e:
-        return False, f"Erro ao cadastrar usuário: {e}"
+        return False, "Ocorreu um erro ao cadastrar o usuário. Tente novamente."
 
 
 def autenticar_usuario(
@@ -117,14 +115,20 @@ def autenticar_usuario(
     senha: str,
     db_path: str = DB_PATH,
 ) -> Tuple[bool, Any]:
-    """Autentica o usuário pelo nome de usuário ou e-mail."""
-    inicializar_tabela_usuarios(db_path)
+    """
+    Autentica o usuário pelo nome de usuário ou e-mail.
+    Em caso de sucesso com hash antigo, atualiza automaticamente para Argon2id.
+    Retorna mensagem genérica segura em caso de falha para prevenir enumeração de contas.
+    """
+    _garantir_tabela_usuarios(db_path)
     identificador = usuario_ou_email.strip().lower()
 
-    if not identificador or not senha:
-        return False, "Informe o usuário/e-mail e a senha."
+    MENSAGEM_ERRO_GENERICA = "Usuário ou senha inválidos."
 
-    conn = sqlite3.connect(db_path)
+    if not identificador or not senha:
+        return False, MENSAGEM_ERRO_GENERICA
+
+    conn = security.get_db_connection(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
@@ -134,25 +138,40 @@ def autenticar_usuario(
 
     if not linha:
         conn.close()
-        return False, "Usuário ou senha incorretos."
+        return False, MENSAGEM_ERRO_GENERICA
 
     usuario_dict = dict(linha)
-    if not verificar_senha(senha, usuario_dict["senha_hash"], usuario_dict["salt"]):
+    stored_hash = usuario_dict["senha_hash"]
+    stored_salt = usuario_dict["salt"]
+
+    valido, needs_rehash = security.verificar_hash_senha_seguro(senha, stored_hash, stored_salt)
+    if not valido:
         conn.close()
-        return False, "Usuário ou senha incorretos."
+        return False, MENSAGEM_ERRO_GENERICA
+
+    # Migração progressiva e automática de hash para Argon2id
+    if needs_rehash:
+        try:
+            novo_hash, novo_salt = security.gerar_hash_senha_seguro(senha)
+            cursor.execute(
+                "UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?",
+                (novo_hash, novo_salt, usuario_dict["id"]),
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[Segurança] Falha no upgrade de hash: {e}")
 
     # Atualiza data do último login
-    ultimo_login = datetime.now().strftime("%d/%m/%Y %H:%M")
+    ultimo_login = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     cursor.execute("UPDATE usuarios SET ultimo_login = ? WHERE id = ?", (ultimo_login, usuario_dict["id"]))
     conn.commit()
     conn.close()
 
-    # Prepara dicionário do usuário logado (removendo campos sensíveis de segurança)
+    # Prepara dicionário do usuário logado garantindo remoção de credenciais
     usuario_dict["ultimo_login"] = ultimo_login
-    del usuario_dict["senha_hash"]
-    del usuario_dict["salt"]
+    usuario_dict.pop("senha_hash", None)
+    usuario_dict.pop("salt", None)
 
-    # Decodifica JSON de impostos
     try:
         usuario_dict["impostos_padrao"] = json.loads(usuario_dict.get("impostos_padrao") or "[]")
     except Exception:
@@ -162,9 +181,9 @@ def autenticar_usuario(
 
 
 def obter_usuario_por_id(usuario_id: int, db_path: str = DB_PATH) -> Optional[Dict[str, Any]]:
-    """Recupera os dados atualizados do usuário pelo ID."""
-    inicializar_tabela_usuarios(db_path)
-    conn = sqlite3.connect(db_path)
+    """Recupera os dados cadastrais do usuário sem expor credenciais."""
+    _garantir_tabela_usuarios(db_path)
+    conn = security.get_db_connection(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,))
@@ -175,10 +194,8 @@ def obter_usuario_por_id(usuario_id: int, db_path: str = DB_PATH) -> Optional[Di
         return None
 
     usuario_dict = dict(linha)
-    if "senha_hash" in usuario_dict:
-        del usuario_dict["senha_hash"]
-    if "salt" in usuario_dict:
-        del usuario_dict["salt"]
+    usuario_dict.pop("senha_hash", None)
+    usuario_dict.pop("salt", None)
 
     try:
         usuario_dict["impostos_padrao"] = json.loads(usuario_dict.get("impostos_padrao") or "[]")
@@ -200,17 +217,21 @@ def atualizar_perfil(
     db_path: str = DB_PATH,
 ) -> Tuple[bool, str]:
     """Atualiza as informações cadastrais e preferências de precificação do usuário."""
-    inicializar_tabela_usuarios(db_path)
+    _garantir_tabela_usuarios(db_path)
     nome = nome.strip()
     email = email.strip().lower()
 
     if not nome or not email:
         return False, "Nome e e-mail são obrigatórios."
 
+    # Validação de limites
+    if len(nome) > 100 or len(email) > 120 or len(empresa) > 100 or len(cargo) > 100:
+        return False, "Tamanho dos campos excede o limite permitido."
+
     impostos_json = json.dumps(impostos_padrao)
 
     try:
-        conn = sqlite3.connect(db_path)
+        conn = security.get_db_connection(db_path)
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE usuarios SET
@@ -233,7 +254,7 @@ def atualizar_perfil(
     except sqlite3.IntegrityError:
         return False, "O e-mail informado já está em uso por outro usuário."
     except Exception as e:
-        return False, f"Erro ao atualizar perfil: {e}"
+        return False, "Erro ao atualizar perfil."
 
 
 def alterar_senha(
@@ -242,15 +263,17 @@ def alterar_senha(
     nova_senha: str,
     db_path: str = DB_PATH,
 ) -> Tuple[bool, str]:
-    """Altera a senha do usuário após validar a senha atual."""
-    inicializar_tabela_usuarios(db_path)
+    """Altera a senha do usuário após validar a senha atual e a política de complexidade."""
+    _garantir_tabela_usuarios(db_path)
     if not senha_atual or not nova_senha:
         return False, "Preencha a senha atual e a nova senha."
 
-    if len(nova_senha) < 6:
-        return False, "A nova senha deve ter no mínimo 6 caracteres."
+    # Valida política de complexidade na nova senha
+    valida, msg_senha = security.validar_politica_senha(nova_senha)
+    if not valida:
+        return False, msg_senha
 
-    conn = sqlite3.connect(db_path)
+    conn = security.get_db_connection(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT senha_hash, salt FROM usuarios WHERE id = ?", (usuario_id,))
@@ -260,11 +283,12 @@ def alterar_senha(
         conn.close()
         return False, "Usuário não encontrado."
 
-    if not verificar_senha(senha_atual, linha["senha_hash"], linha["salt"]):
+    valido, _ = security.verificar_hash_senha_seguro(senha_atual, linha["senha_hash"], linha["salt"])
+    if not valido:
         conn.close()
         return False, "Senha atual incorreta."
 
-    novo_hash, novo_salt = gerar_hash_senha(nova_senha)
+    novo_hash, novo_salt = security.gerar_hash_senha_seguro(nova_senha)
     cursor.execute("""
         UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?
     """, (novo_hash, novo_salt, usuario_id))

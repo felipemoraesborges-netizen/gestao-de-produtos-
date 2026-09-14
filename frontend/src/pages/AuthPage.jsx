@@ -42,8 +42,8 @@ export default function AuthPage({ onLoginSuccess, showToast }) {
       showToast('Por favor, preencha todos os campos obrigatórios (*).', 'error');
       return;
     }
-    if (senhaCad.length < 6) {
-      showToast('A senha deve conter no mínimo 6 caracteres.', 'error');
+    if (senhaCad.length < 10) {
+      showToast('A senha deve conter no mínimo 10 caracteres e incluir maiúsculas, minúsculas, números e símbolos.', 'error');
       return;
     }
     if (senhaCad !== senhaConf) {
@@ -247,7 +247,7 @@ export default function AuthPage({ onLoginSuccess, showToast }) {
                   <input
                     type="password"
                     required
-                    placeholder="Mínimo 6 dígitos"
+                    placeholder="Mínimo 10 caracteres"
                     value={senhaCad}
                     onChange={(e) => setSenhaCad(e.target.value)}
                     className="w-full px-3.5 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -282,7 +282,7 @@ export default function AuthPage({ onLoginSuccess, showToast }) {
           {/* Security footnote */}
           <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
             <Shield className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Autenticação criptografada com PBKDF2-HMAC-SHA256</span>
+            <span>Autenticação criptografada com Argon2id & JWT</span>
           </div>
 
         </div>

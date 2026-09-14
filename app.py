@@ -4,11 +4,13 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 from defusedxml import ElementTree as ET
+from xml.etree.ElementTree import Element
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 import auth
+import security
 
 DB_PATH = "banco_notas.db"
 PASTA_XMLS_PROCESSADOS = "xmls_processados"
@@ -17,7 +19,7 @@ PASTA_XMLS_PROCESSADOS = "xmls_processados"
 def inicializar_banco() -> None:
     """Inicializa as pastas, tabelas de notas e usuários."""
     os.makedirs(PASTA_XMLS_PROCESSADOS, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = security.get_db_connection(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS historico_nfe (
@@ -62,7 +64,7 @@ def inicializar_banco() -> None:
 def carregar_indice(usuario_id: Optional[int] = None) -> Dict[str, Dict[str, Any]]:
     """Carrega o histórico do SQLite em formato de dicionário."""
     inicializar_banco()
-    conn = sqlite3.connect(DB_PATH)
+    conn = security.get_db_connection(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     if usuario_id is not None:
@@ -81,7 +83,7 @@ def carregar_indice(usuario_id: Optional[int] = None) -> Dict[str, Dict[str, Any
 def salvar_nota(dados: Dict[str, Any]) -> None:
     """Salva uma nova nota fiscal no banco de dados."""
     inicializar_banco()
-    conn = sqlite3.connect(DB_PATH)
+    conn = security.get_db_connection(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO historico_nfe 
@@ -97,7 +99,7 @@ def salvar_config_nota(chave_acesso: str, markup: float, custo_adicional: float,
     """Salva as configurações de cálculo de uma nota específica."""
     import json
     inicializar_banco()
-    conn = sqlite3.connect(DB_PATH)
+    conn = security.get_db_connection(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT OR REPLACE INTO configuracoes_nota
@@ -119,7 +121,7 @@ def carregar_config_nota(chave_acesso: str, defaults: Optional[Dict[str, Any]] =
     """Carrega as configurações salvas de uma nota. Retorna defaults se não houver registro."""
     import json
     inicializar_banco()
-    conn = sqlite3.connect(DB_PATH)
+    conn = security.get_db_connection(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM configuracoes_nota WHERE chave_acesso = ?", (chave_acesso,))
@@ -156,11 +158,11 @@ def carregar_produtos_da_nota(arquivo_salvo: str, impostos_selecionados: List[st
         return []
 
 
-def nome_tag(elemento: ET.Element) -> str:
+def nome_tag(elemento: Element) -> str:
     return elemento.tag.split("}")[-1]
 
 
-def encontrar_elemento(elemento_pai: Optional[ET.Element], nome: str) -> Optional[ET.Element]:
+def encontrar_elemento(elemento_pai: Optional[Element], nome: str) -> Optional[Element]:
     if elemento_pai is None:
         return None
     for elemento in elemento_pai.iter():
@@ -169,7 +171,7 @@ def encontrar_elemento(elemento_pai: Optional[ET.Element], nome: str) -> Optiona
     return None
 
 
-def encontrar_filho(elemento_pai: Optional[ET.Element], nome: str) -> Optional[ET.Element]:
+def encontrar_filho(elemento_pai: Optional[Element], nome: str) -> Optional[Element]:
     if elemento_pai is None:
         return None
     for filho in list(elemento_pai):
@@ -178,7 +180,7 @@ def encontrar_filho(elemento_pai: Optional[ET.Element], nome: str) -> Optional[E
     return None
 
 
-def obter_texto(elemento_pai: Optional[ET.Element], nome: str, padrao: str = "") -> str:
+def obter_texto(elemento_pai: Optional[Element], nome: str, padrao: str = "") -> str:
     elemento = encontrar_elemento(elemento_pai, nome)
     if elemento is not None and elemento.text:
         return elemento.text.strip()
@@ -197,14 +199,14 @@ def converter_decimal(valor: Any, padrao: Decimal = Decimal("0")) -> Decimal:
         return padrao
 
 
-def valor_tag(elemento_pai: Optional[ET.Element], nome: str) -> Decimal:
+def valor_tag(elemento_pai: Optional[Element], nome: str) -> Decimal:
     elemento = encontrar_elemento(elemento_pai, nome)
     if elemento is not None and elemento.text:
         return converter_decimal(elemento.text)
     return Decimal("0")
 
 
-def ler_totais_nfe(root: ET.Element) -> Dict[str, Decimal]:
+def ler_totais_nfe(root: Element) -> Dict[str, Decimal]:
     total_node = encontrar_elemento(root, "ICMSTot")
     if total_node is None:
         return {
@@ -221,7 +223,7 @@ def ler_totais_nfe(root: ET.Element) -> Dict[str, Decimal]:
     }
 
 
-def localizar_produtos(root: ET.Element, impostos_selecionados: List[str]) -> List[Dict[str, Any]]:
+def localizar_produtos(root: Element, impostos_selecionados: List[str]) -> List[Dict[str, Any]]:
     produtos = []
     totais_nfe = ler_totais_nfe(root)
     detalhes = []
@@ -316,7 +318,7 @@ def localizar_produtos(root: ET.Element, impostos_selecionados: List[str]) -> Li
     return produtos
 
 
-def obter_chave_acesso(root: ET.Element) -> Optional[str]:
+def obter_chave_acesso(root: Element) -> Optional[str]:
     inf_nfe = encontrar_elemento(root, "infNFe")
     if inf_nfe is not None:
         id_attr = (inf_nfe.get("Id") or "").strip()
@@ -329,7 +331,7 @@ def obter_chave_acesso(root: ET.Element) -> Optional[str]:
     return None
 
 
-def obter_metadados_nfe(root: ET.Element) -> Dict[str, Any]:
+def obter_metadados_nfe(root: Element) -> Dict[str, Any]:
     ide_node = encontrar_elemento(root, "ide")
     emit_node = encontrar_elemento(root, "emit")
     total_node = encontrar_elemento(root, "ICMSTot")

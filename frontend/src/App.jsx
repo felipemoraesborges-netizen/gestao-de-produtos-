@@ -11,6 +11,9 @@ import Toast from './components/Toast';
 import AuthPage from './pages/AuthPage';
 import HistoryPage from './pages/HistoryPage';
 import ProfilePage from './pages/ProfilePage';
+import InventoryPage from './pages/InventoryPage';
+import ReportsPage from './pages/ReportsPage';
+import AuditPage from './pages/AuditPage';
 
 import {
   getUserProfile,
@@ -18,6 +21,10 @@ import {
   uploadXmlFiles,
   calculateMetrics,
   downloadCalculatedCsv,
+  incorporarNfeAoEstoque,
+  getEstoque,
+  logAuditoriaFrontend,
+  logoutUser,
 } from './services/api';
 
 export default function App() {
@@ -34,6 +41,7 @@ export default function App() {
   // 2. Navigation State
   const [activeTab, setActiveTab] = useState('pricing');
   const [toast, setToast] = useState(null);
+  const [alertaEstoqueCount, setAlertaEstoqueCount] = useState(0);
 
   // 3. Pricing & Product State
   const [produtos, setProdutos] = useState([]);
@@ -49,6 +57,23 @@ export default function App() {
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
   };
+
+  // Buscar alertas de estoque para badge na Navbar
+  const fetchAlertasEstoque = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await getEstoque(user.id);
+      if (res && res.resumo) {
+        setAlertaEstoqueCount((res.resumo.itens_baixos || 0) + (res.resumo.itens_zerados || 0));
+      }
+    } catch (e) {
+      // Silencioso
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchAlertasEstoque();
+  }, [fetchAlertasEstoque, activeTab]);
 
   // Sync user defaults when user logs in or profile changes
   useEffect(() => {
@@ -106,14 +131,12 @@ export default function App() {
       }
 
       if (res.produtos && res.produtos.length > 0) {
-        // Inicializa dicionário de unidades por embalagem
         const initialUnidades = {};
         res.produtos.forEach((p) => {
           initialUnidades[p.id] = 1.0;
         });
         setUnidadesPorEmbalagem(initialUnidades);
 
-        // Calcula métricas iniciais
         const calcResult = await calculateMetrics({
           produtos: res.produtos,
           markup,
@@ -127,7 +150,6 @@ export default function App() {
 
         showToast(`${res.produtos.length} produto(s) importado(s) com sucesso!`, 'success');
         
-        // Efeito comemorativo de sucesso
         confetti({
           particleCount: 80,
           spread: 70,
@@ -150,6 +172,34 @@ export default function App() {
       ...prev,
       [productId]: newUnit,
     }));
+  };
+
+  // Incorporar produtos calculados ao estoque contínuo
+  const handleIncorporarEstoque = async () => {
+    if (produtos.length === 0) {
+      showToast('Nenhum produto processado para incorporar ao estoque.', 'error');
+      return;
+    }
+    try {
+      const numeroNota = produtos[0]?.numero_nota || '';
+      const res = await incorporarNfeAoEstoque({
+        produtos,
+        usuario_id: user?.id,
+        usuario_nome: user?.nome,
+        numero_nota: numeroNota,
+      });
+
+      showToast(res.message || 'Produtos incorporados ao estoque com sucesso!', 'success');
+      confetti({
+        particleCount: 100,
+        spread: 80,
+        origin: { y: 0.5 },
+        colors: ['#10b981', '#6366f1', '#f59e0b'],
+      });
+      fetchAlertasEstoque();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   // Quick save current parameters to user profile
@@ -187,8 +237,29 @@ export default function App() {
     }
   };
 
+  // Auto-logout when token expires and cannot be refreshed
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setProdutos([]);
+      setResumo(null);
+      showToast('Sessão expirada. Por favor, acesse novamente.', 'warning');
+    };
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
+  }, []);
+
   // Logout handler
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (user) {
+      logAuditoriaFrontend({
+        usuario_id: user.id,
+        usuario_nome: user.nome,
+        acao: 'LOGOUT',
+        detalhes: `Usuário '${user.usuario}' encerrou a sessão.`,
+      });
+    }
+    await logoutUser();
     setUser(null);
     setProdutos([]);
     setResumo(null);
@@ -214,6 +285,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         user={user}
         onLogout={handleLogout}
+        alertaEstoqueCount={alertaEstoqueCount}
       />
 
       {/* Main Content Area */}
@@ -248,6 +320,7 @@ export default function App() {
                 unidadesPorEmbalagem={unidadesPorEmbalagem}
                 onUpdateUnidade={handleUpdateUnidade}
                 onExportCsv={handleExportCsv}
+                onIncorporarEstoque={handleIncorporarEstoque}
               />
             )}
 
@@ -259,21 +332,27 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-6">
-              <h1 className="text-2xl font-extrabold text-slate-800">📊 Dashboard Analítico de Precificação</h1>
-              <p className="text-sm text-slate-500 mt-1">
-                Visualização detalhada da composição de custos, margens e distribuição de lucros.
-              </p>
-            </div>
-            {resumo && <MetricCards resumo={resumo} />}
-            <ChartsSection produtos={produtos} resumo={resumo} />
-          </div>
+        {activeTab === 'inventory' && (
+          <InventoryPage
+            user={user}
+            showToast={showToast}
+            onNavigateToReports={() => setActiveTab('reports')}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <ReportsPage
+            user={user}
+            showToast={showToast}
+          />
         )}
 
         {activeTab === 'history' && (
           <HistoryPage user={user} showToast={showToast} />
+        )}
+
+        {activeTab === 'audit' && (
+          <AuditPage user={user} showToast={showToast} />
         )}
 
         {activeTab === 'profile' && (
@@ -290,3 +369,4 @@ export default function App() {
     </div>
   );
 }
+

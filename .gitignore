@@ -9,11 +9,15 @@ __pycache__/
 dist/
 build/
 .env
-.venv/
-venv/
-env/
+.env.local
+.env.*.local
+*.pem
+*.key
 
-# Banco de dados local (não versionar dados pessoais)
+# Arquivos XML de notas fiscais (dados fiscais confidenciais)
+xmls_processados/
+
+# Banco de dados local (não versionar dados confidenciais)
 banco_notas.db
 *.db
 *.sqlite

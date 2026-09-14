@@ -62,8 +62,8 @@ export default function ProfilePage({ user, onUserUpdated, showToast }) {
       showToast('Preencha a senha atual e a nova senha.', 'error');
       return;
     }
-    if (novaSenha.length < 6) {
-      showToast('A nova senha deve ter no mínimo 6 caracteres.', 'error');
+    if (novaSenha.length < 10) {
+      showToast('A nova senha deve ter no mínimo 10 caracteres e incluir maiúsculas, minúsculas, números e símbolos.', 'error');
       return;
     }
     if (novaSenha !== confirmaNovaSenha) {
@@ -283,7 +283,7 @@ export default function ProfilePage({ user, onUserUpdated, showToast }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Nova Senha (mín. 6 dígitos) *</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Nova Senha (mín. 10 caracteres) *</label>
                   <input
                     type="password"
                     required
