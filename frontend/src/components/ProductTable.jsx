@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import {
   Search,
-  Download,
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
   FileSpreadsheet,
   Package,
-  Layers,
-  Info,
 } from 'lucide-react';
 
 export default function ProductTable({
@@ -63,15 +60,15 @@ export default function ProductTable({
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-sm overflow-hidden mb-8 transition-colors">
       {/* Table Header Controls */}
-      <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 border-b border-slate-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <Package className="w-5 h-5 text-brand-600" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <Package className="w-5 h-5 text-brand-600 dark:text-brand-400" />
             Produtos Processados ({produtos.length})
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Ajuste as unidades por embalagem para recálculo instantâneo de custo real e preço de revenda.
           </p>
         </div>
@@ -85,7 +82,7 @@ export default function ProductTable({
               placeholder="Buscar por código ou descrição..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-48 sm:w-56 transition-all"
+              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 w-48 sm:w-56 transition-all"
             />
           </div>
 
@@ -93,7 +90,7 @@ export default function ProductTable({
           {onIncorporarEstoque && (
             <button
               onClick={onIncorporarEstoque}
-              className="flex items-center gap-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all duration-200"
+              className="flex items-center gap-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all duration-200 btn-press"
             >
               <Package className="w-4 h-4" />
               Incorporar ao Estoque
@@ -103,7 +100,7 @@ export default function ProductTable({
           {/* Export Button */}
           <button
             onClick={onExportCsv}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all duration-200"
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all duration-200 btn-press"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Exportar CSV
@@ -114,12 +111,12 @@ export default function ProductTable({
       {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+          <thead className="bg-slate-50 dark:bg-zinc-800/80 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-zinc-700">
             <tr>
               <th className="py-3 px-4 w-8"></th>
               <th
                 onClick={() => handleSort('codigo')}
-                className="py-3 px-4 cursor-pointer hover:text-brand-600 transition-colors"
+                className="py-3 px-4 cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
               >
                 <div className="flex items-center gap-1">
                   Código <ArrowUpDown className="w-3 h-3" />
@@ -127,20 +124,20 @@ export default function ProductTable({
               </th>
               <th
                 onClick={() => handleSort('produto')}
-                className="py-3 px-4 cursor-pointer hover:text-brand-600 transition-colors"
+                className="py-3 px-4 cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
               >
                 <div className="flex items-center gap-1">
                   Descrição do Produto <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
               <th className="py-3 px-4 text-center">Un. Orig.</th>
-              <th className="py-3 px-4 text-center bg-brand-50/50 text-brand-900">
+              <th className="py-3 px-4 text-center bg-brand-50/50 dark:bg-brand-950/40 text-brand-900 dark:text-brand-300">
                 Unid. / Emb.
               </th>
               <th className="py-3 px-4 text-right">Qtd Real</th>
               <th
                 onClick={() => handleSort('custo_unitario_final')}
-                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 transition-colors"
+                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
               >
                 <div className="flex items-center justify-end gap-1">
                   Custo Unit. Final <ArrowUpDown className="w-3 h-3" />
@@ -148,7 +145,7 @@ export default function ProductTable({
               </th>
               <th
                 onClick={() => handleSort('preco_revenda_unitario')}
-                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 transition-colors bg-blue-50/30 font-extrabold text-brand-800"
+                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors bg-blue-50/40 dark:bg-blue-950/30 font-extrabold text-brand-800 dark:text-brand-300"
               >
                 <div className="flex items-center justify-end gap-1">
                   Preço Sugerido <ArrowUpDown className="w-3 h-3" />
@@ -156,7 +153,7 @@ export default function ProductTable({
               </th>
               <th
                 onClick={() => handleSort('lucro_total')}
-                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 transition-colors text-emerald-700 font-bold"
+                className="py-3 px-4 text-right cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-emerald-700 dark:text-emerald-400 font-bold"
               >
                 <div className="flex items-center justify-end gap-1">
                   Lucro Total <ArrowUpDown className="w-3 h-3" />
@@ -165,19 +162,19 @@ export default function ProductTable({
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/80">
             {sortedProducts.map((p, index) => {
               const isExpanded = expandedRow === p.id;
               const currentUnidade = unidadesPorEmbalagem[p.id] ?? p.unidades_por_embalagem ?? 1.0;
 
               return (
                 <React.Fragment key={p.id || index}>
-                  <tr className="hover:bg-slate-50/80 transition-colors">
+                  <tr className="hover:bg-slate-50/80 dark:hover:bg-zinc-800/40 transition-colors">
                     {/* Expand/Collapse */}
                     <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => setExpandedRow(isExpanded ? null : p.id)}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+                        className="p-1 rounded hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors btn-press"
                         title="Ver detalhes de impostos e frete"
                       >
                         {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -185,14 +182,14 @@ export default function ProductTable({
                     </td>
 
                     {/* Código */}
-                    <td className="py-3 px-4 font-mono font-semibold text-slate-600">
+                    <td className="py-3 px-4 font-mono font-semibold text-slate-600 dark:text-slate-400">
                       {p.codigo}
                     </td>
 
                     {/* Descrição */}
                     <td className="py-3 px-4 max-w-xs sm:max-w-md">
-                      <div className="font-bold text-slate-800 line-clamp-1">{p.produto}</div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                      <div className="font-bold text-slate-800 dark:text-slate-100 line-clamp-1">{p.produto}</div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-2 mt-0.5">
                         <span>NF-e: {p.numero_nota || 'S/N'}</span>
                         <span>•</span>
                         <span className="truncate max-w-[200px]">{p.fornecedor}</span>
@@ -201,13 +198,13 @@ export default function ProductTable({
 
                     {/* Unidade Original */}
                     <td className="py-3 px-4 text-center">
-                      <span className="bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded text-[11px]">
+                      <span className="bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-300 font-bold px-2 py-0.5 rounded text-[11px]">
                         {p.unidade} ({p.quantidade})
                       </span>
                     </td>
 
                     {/* Unidades por Embalagem (EDITÁVEL INLINE) */}
-                    <td className="py-3 px-4 text-center bg-brand-50/30">
+                    <td className="py-3 px-4 text-center bg-brand-50/30 dark:bg-brand-950/20">
                       <input
                         type="number"
                         min="1"
@@ -217,29 +214,29 @@ export default function ProductTable({
                           const val = parseFloat(e.target.value) || 1;
                           onUpdateUnidade(p.id, val);
                         }}
-                        className="w-16 text-center font-bold text-xs py-1 px-1.5 rounded-lg border border-brand-300 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 text-brand-900 font-mono shadow-inner"
+                        className="w-16 text-center font-bold text-xs py-1 px-1.5 rounded-lg border border-brand-300 dark:border-brand-500/40 bg-white dark:bg-zinc-800 text-brand-900 dark:text-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono shadow-inner"
                       />
                     </td>
 
                     {/* Quantidade Real */}
-                    <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700">
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
                       {p.quantidade_real}
                     </td>
 
                     {/* Custo Unitário Final */}
-                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-800">
+                    <td className="py-3 px-4 text-right font-mono font-bold text-slate-800 dark:text-slate-100">
                       {formatBRL(p.custo_unitario_final)}
                     </td>
 
                     {/* Preço de Revenda Sugerido */}
-                    <td className="py-3 px-4 text-right font-mono font-extrabold text-brand-700 bg-blue-50/30 text-sm">
+                    <td className="py-3 px-4 text-right font-mono font-extrabold text-brand-700 dark:text-brand-400 bg-blue-50/30 dark:bg-blue-950/20 text-sm">
                       {formatBRL(p.preco_revenda_unitario)}
                     </td>
 
                     {/* Lucro Total */}
-                    <td className="py-3 px-4 text-right font-mono font-extrabold text-emerald-600">
+                    <td className="py-3 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
                       {formatBRL(p.lucro_total)}
-                      <span className="block text-[10px] text-emerald-500 font-normal">
+                      <span className="block text-[10px] text-emerald-500 dark:text-emerald-400/80 font-normal">
                         ({p.margem_lucro_pct}% margem)
                       </span>
                     </td>
@@ -247,40 +244,40 @@ export default function ProductTable({
 
                   {/* Detalhes Expandidos (Detalhamento Completo de Custos e Impostos) */}
                   {isExpanded && (
-                    <tr className="bg-slate-50/90 border-t border-b border-slate-200">
+                    <tr className="bg-slate-50/90 dark:bg-zinc-950/60 border-t border-b border-slate-200 dark:border-zinc-800">
                       <td colSpan={9} className="p-4">
                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-[11px]">
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">Valor Prod.</span>
-                            <span className="font-bold text-slate-700">{formatBRL(p.valor_produtos)}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">Valor Prod.</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL(p.valor_produtos)}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">Frete Rateado</span>
-                            <span className="font-bold text-slate-700">{formatBRL(p.frete)}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">Frete Rateado</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL(p.frete)}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">Seguro / Outras</span>
-                            <span className="font-bold text-slate-700">{formatBRL((p.seguro || 0) + (p.outras_despesas || 0))}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">Seguro / Outras</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL((p.seguro || 0) + (p.outras_despesas || 0))}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">Desconto NF</span>
-                            <span className="font-bold text-rose-600">-{formatBRL(p.desconto)}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">Desconto NF</span>
+                            <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatBRL(p.desconto)}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">ICMS + ST</span>
-                            <span className="font-bold text-slate-700">{formatBRL((p.icms || 0) + (p.icms_st || 0))}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">ICMS + ST</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL((p.icms || 0) + (p.icms_st || 0))}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">IPI + II</span>
-                            <span className="font-bold text-slate-700">{formatBRL((p.ipi || 0) + (p.ii || 0))}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">IPI + II</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL((p.ipi || 0) + (p.ii || 0))}</span>
                           </div>
-                          <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                            <span className="text-slate-400 block font-medium">PIS + COFINS</span>
-                            <span className="font-bold text-slate-700">{formatBRL((p.pis || 0) + (p.cofins || 0))}</span>
+                          <div className="bg-white dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800">
+                            <span className="text-slate-400 dark:text-slate-500 block font-medium">PIS + COFINS</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 font-mono">{formatBRL((p.pis || 0) + (p.cofins || 0))}</span>
                           </div>
-                          <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
-                            <span className="text-emerald-600 block font-bold">Lucro Unitário</span>
-                            <span className="font-extrabold text-emerald-700">{formatBRL(p.lucro_unitario)}</span>
+                          <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
+                            <span className="text-emerald-600 dark:text-emerald-400 block font-bold">Lucro Unitário</span>
+                            <span className="font-extrabold text-emerald-700 dark:text-emerald-300 font-mono">{formatBRL(p.lucro_unitario)}</span>
                           </div>
                         </div>
                       </td>
@@ -295,3 +292,4 @@ export default function ProductTable({
     </div>
   );
 }
+

@@ -7,6 +7,7 @@ import ConfigPanel from './components/ConfigPanel';
 import ProductTable from './components/ProductTable';
 import ChartsSection from './components/ChartsSection';
 import Toast from './components/Toast';
+import WelcomeGuide from './components/WelcomeGuide';
 
 import AuthPage from './pages/AuthPage';
 import HistoryPage from './pages/HistoryPage';
@@ -16,7 +17,6 @@ import ReportsPage from './pages/ReportsPage';
 import AuditPage from './pages/AuditPage';
 
 import {
-  getUserProfile,
   updateUserProfile,
   uploadXmlFiles,
   calculateMetrics,
@@ -28,7 +28,35 @@ import {
 } from './services/api';
 
 export default function App() {
-  // 1. Authentication State
+  // 1. Theme State (Dark / Light)
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = localStorage.getItem('gestao_theme');
+      if (stored) return stored;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem('gestao_theme', theme);
+    } catch {
+      // silencioso
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  // 2. Authentication State
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('gestao_user');
@@ -38,12 +66,21 @@ export default function App() {
     }
   });
 
-  // 2. Navigation State
+  // 3. Navigation State
   const [activeTab, setActiveTab] = useState('pricing');
   const [toast, setToast] = useState(null);
   const [alertaEstoqueCount, setAlertaEstoqueCount] = useState(0);
 
-  // 3. Pricing & Product State
+  // 4. Onboarding Guide State
+  const [showGuide, setShowGuide] = useState(() => {
+    try {
+      return localStorage.getItem('gestao_hide_guide') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  // 5. Pricing & Product State
   const [produtos, setProdutos] = useState([]);
   const [resumo, setResumo] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -54,9 +91,9 @@ export default function App() {
   const [selectedTaxes, setSelectedTaxes] = useState(['ICMS ST', 'FCP ST', 'IPI', 'II']);
   const [unidadesPorEmbalagem, setUnidadesPorEmbalagem] = useState({});
 
-  const showToast = (message, type = 'info') => {
+  const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
-  };
+  }, []);
 
   // Buscar alertas de estoque para badge na Navbar
   const fetchAlertasEstoque = useCallback(async () => {
@@ -66,7 +103,7 @@ export default function App() {
       if (res && res.resumo) {
         setAlertaEstoqueCount((res.resumo.itens_baixos || 0) + (res.resumo.itens_zerados || 0));
       }
-    } catch (e) {
+    } catch {
       // Silencioso
     }
   }, [user]);
@@ -75,7 +112,7 @@ export default function App() {
     fetchAlertasEstoque();
   }, [fetchAlertasEstoque, activeTab]);
 
-  // Sync user defaults when user logs in or profile changes
+  // Sincronizar preferências do usuário quando perfil carregar
   useEffect(() => {
     if (user) {
       if (user.markup_padrao !== undefined) setMarkup(Number(user.markup_padrao));
@@ -87,7 +124,7 @@ export default function App() {
     }
   }, [user]);
 
-  // Recalculate metrics when parameters or packaging change
+  // Recalcular métricas quando parâmetros ou embalagens mudarem
   const runRecalculate = useCallback(async () => {
     if (produtos.length === 0) return;
     try {
@@ -105,7 +142,7 @@ export default function App() {
     }
   }, [produtos, markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem]);
 
-  // Debounced live calculation when inputs change
+  // Debounced live calculation
   const calcTimeoutRef = useRef(null);
   useEffect(() => {
     if (produtos.length > 0) {
@@ -115,9 +152,153 @@ export default function App() {
       }, 150);
     }
     return () => clearTimeout(calcTimeoutRef.current);
-  }, [markup, custoAdicional, selectedTaxes, unidadesPorEmbalagem]);
+  }, [runRecalculate, produtos.length]);
 
-  // Handle XML File Upload
+  // Carregar dados de demonstração para novos usuários
+  const handleLoadDemo = async () => {
+    const demoProdutos = [
+      {
+        id: 'DEMO_01',
+        codigo: 'PAR-INOX-316',
+        produto: 'Parafuso Sextavado Aço Inox 316 (Caixa c/ 100 un)',
+        unidade: 'CX',
+        quantidade: 10,
+        unidades_por_embalagem: 100,
+        quantidade_real: 1000,
+        valor_produtos: 450.00,
+        frete: 35.00,
+        seguro: 5.00,
+        outras_despesas: 0.00,
+        desconto: 10.00,
+        icms: 54.00,
+        icms_st: 32.50,
+        ipi: 22.50,
+        ii: 0.00,
+        pis: 7.42,
+        cofins: 34.20,
+        numero_nota: '10482',
+        serie_nota: '1',
+        fornecedor: 'Metalúrgica Inox Brasil Ltda',
+        cnpj_emit: '12.345.678/0001-90',
+        chave_acesso: '35260812345678000190550010000104821876543210',
+        arquivo_xml: 'demo_nfe_parafusos.xml',
+      },
+      {
+        id: 'DEMO_02',
+        codigo: 'ISOT-CITRUS-500',
+        produto: 'Bebida Isotônica Citrus 500ml (Fardo c/ 12 garrafas)',
+        unidade: 'FD',
+        quantidade: 25,
+        unidades_por_embalagem: 12,
+        quantidade_real: 300,
+        valor_produtos: 1125.00,
+        frete: 65.00,
+        seguro: 0.00,
+        outras_despesas: 0.00,
+        desconto: 25.00,
+        icms: 135.00,
+        icms_st: 85.00,
+        ipi: 0.00,
+        ii: 0.00,
+        pis: 18.56,
+        cofins: 85.50,
+        numero_nota: '88219',
+        serie_nota: '2',
+        fornecedor: 'Distribuidora Bebidas & Cia S.A.',
+        cnpj_emit: '98.765.432/0001-11',
+        chave_acesso: '35260898765432000111550020000882191987654321',
+        arquivo_xml: 'demo_nfe_isotonico.xml',
+      },
+      {
+        id: 'DEMO_03',
+        codigo: 'BOB-TERM-80',
+        produto: 'Bobina Térmica PDV Amarela 80mm x 40m (Caixa c/ 30 un)',
+        unidade: 'CX',
+        quantidade: 15,
+        unidades_por_embalagem: 30,
+        quantidade_real: 450,
+        valor_produtos: 855.00,
+        frete: 42.00,
+        seguro: 0.00,
+        outras_despesas: 0.00,
+        desconto: 0.00,
+        icms: 102.60,
+        icms_st: 0.00,
+        ipi: 42.75,
+        ii: 0.00,
+        pis: 14.10,
+        cofins: 65.00,
+        numero_nota: '44102',
+        serie_nota: '1',
+        fornecedor: 'Papéis & Suprimentos Industriais',
+        cnpj_emit: '44.555.666/0001-22',
+        chave_acesso: '35260844555666000122550010000441021456789012',
+        arquivo_xml: 'demo_nfe_bobinas.xml',
+      },
+      {
+        id: 'DEMO_04',
+        codigo: 'ALC-GEL-70-1L',
+        produto: 'Álcool em Gel Antisséptico 70% 1L (Caixa c/ 6 frascos)',
+        unidade: 'CX',
+        quantidade: 20,
+        unidades_por_embalagem: 6,
+        quantidade_real: 120,
+        valor_produtos: 720.00,
+        frete: 30.00,
+        seguro: 0.00,
+        outras_despesas: 0.00,
+        desconto: 15.00,
+        icms: 86.40,
+        icms_st: 45.00,
+        ipi: 0.00,
+        ii: 0.00,
+        pis: 11.88,
+        cofins: 54.72,
+        numero_nota: '77310',
+        serie_nota: '1',
+        fornecedor: 'Química & Higiene Nacional S.A.',
+        cnpj_emit: '77.888.999/0001-33',
+        chave_acesso: '35260877888999000133550010000773101789012345',
+        arquivo_xml: 'demo_nfe_alcool.xml',
+      }
+    ];
+
+    const initialUnidades = {
+      'DEMO_01': 100,
+      'DEMO_02': 12,
+      'DEMO_03': 30,
+      'DEMO_04': 6,
+    };
+    setUnidadesPorEmbalagem(initialUnidades);
+
+    try {
+      setIsProcessing(true);
+      const calcResult = await calculateMetrics({
+        produtos: demoProdutos,
+        markup,
+        custo_adicional_unitario: custoAdicional,
+        impostos_selecionados: selectedTaxes,
+        unidades_por_embalagem: initialUnidades,
+      });
+
+      setProdutos(calcResult.produtos);
+      setResumo(calcResult.resumo);
+
+      showToast('Dados de demonstração carregados com sucesso! Experimente ajustar embalagens e markup.', 'success');
+      confetti({
+        particleCount: 90,
+        spread: 75,
+        origin: { y: 0.6 },
+        colors: ['#0c8de4', '#10b981', '#6366f1'],
+      });
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Upload de arquivos XML
   const handleUploadXmls = async (files) => {
     try {
       setIsProcessing(true);
@@ -202,7 +383,7 @@ export default function App() {
     }
   };
 
-  // Quick save current parameters to user profile
+  // Salvar preferências como padrão do perfil
   const handleSaveAsDefault = async () => {
     if (!user) return;
     try {
@@ -226,7 +407,7 @@ export default function App() {
     }
   };
 
-  // Export CSV
+  // Exportar CSV
   const handleExportCsv = async () => {
     if (produtos.length === 0) return;
     try {
@@ -237,7 +418,7 @@ export default function App() {
     }
   };
 
-  // Auto-logout when token expires and cannot be refreshed
+  // Auto-logout se a sessão expirar
   useEffect(() => {
     const handleAuthExpired = () => {
       setUser(null);
@@ -247,7 +428,7 @@ export default function App() {
     };
     window.addEventListener('auth:expired', handleAuthExpired);
     return () => window.removeEventListener('auth:expired', handleAuthExpired);
-  }, []);
+  }, [showToast]);
 
   // Logout handler
   const handleLogout = async () => {
@@ -267,7 +448,7 @@ export default function App() {
     showToast('Sessão encerrada com sucesso.', 'info');
   };
 
-  // If not authenticated, display modern Auth Page
+  // Se não autenticado, renderizar AuthPage
   if (!user) {
     return (
       <>
@@ -278,7 +459,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-slate-100 flex flex-col transition-colors duration-200">
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -286,6 +467,8 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         alertaEstoqueCount={alertaEstoqueCount}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Content Area */}
@@ -293,11 +476,30 @@ export default function App() {
         {activeTab === 'pricing' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             
+            {/* Onboarding Welcome Guide */}
+            {showGuide && (
+              <WelcomeGuide
+                onLoadDemo={handleLoadDemo}
+                onDismiss={() => {
+                  setShowGuide(false);
+                  try {
+                    localStorage.setItem('gestao_hide_guide', 'true');
+                  } catch {
+                    // silencioso
+                  }
+                }}
+              />
+            )}
+
             {/* Metric Summary Cards */}
             {resumo && <MetricCards resumo={resumo} />}
 
             {/* XML Upload Box */}
-            <FileUpload onUpload={handleUploadXmls} isProcessing={isProcessing} />
+            <FileUpload
+              onUpload={handleUploadXmls}
+              isProcessing={isProcessing}
+              onLoadDemo={produtos.length === 0 ? handleLoadDemo : undefined}
+            />
 
             {/* Configuration Controls */}
             {produtos.length > 0 && (
@@ -326,7 +528,7 @@ export default function App() {
 
             {/* Quick Charts */}
             {produtos.length > 0 && resumo && (
-              <ChartsSection produtos={produtos} resumo={resumo} />
+              <ChartsSection produtos={produtos} resumo={resumo} theme={theme} />
             )}
 
           </div>
@@ -369,4 +571,5 @@ export default function App() {
     </div>
   );
 }
+
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Boxes,
   Plus,
@@ -6,10 +6,8 @@ import {
   ArrowDownRight,
   SlidersHorizontal,
   AlertTriangle,
-  CheckCircle2,
   XCircle,
   Search,
-  Filter,
   Trash2,
   Edit3,
   RotateCcw,
@@ -18,10 +16,10 @@ import {
   Package,
   DollarSign,
   TrendingUp,
-  Clock,
   Building2,
   FileSpreadsheet,
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   getEstoque,
   saveEstoqueItem,
@@ -40,6 +38,9 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
   // Modais
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [itemForm, setItemForm] = useState({
     codigo: '',
     produto: '',
@@ -67,7 +68,7 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Carregar dados de estoque
-  const fetchEstoque = async () => {
+  const fetchEstoque = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getEstoque(user?.id, filtroStatus, busca);
@@ -78,11 +79,11 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, filtroStatus, busca, showToast]);
 
   useEffect(() => {
     fetchEstoque();
-  }, [user, filtroStatus, busca]);
+  }, [fetchEstoque]);
 
   // Abertura do Modal de Cadastro / Edição
   const handleOpenNewItemModal = () => {
@@ -151,16 +152,18 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
     }
   };
 
-  const handleDeleteItem = async (item) => {
-    if (!window.confirm(`Tem certeza que deseja remover o produto "${item.produto}" (${item.codigo}) do estoque?`)) {
-      return;
-    }
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmItem) return;
     try {
-      await deleteEstoqueItem(item.id, user?.id, user?.nome);
+      setIsDeleting(true);
+      await deleteEstoqueItem(deleteConfirmItem.id, user?.id, user?.nome);
       showToast('Produto excluído com sucesso do estoque!', 'success');
+      setDeleteConfirmItem(null);
       fetchEstoque();
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -609,9 +612,9 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteItem(item)}
+                          onClick={() => setDeleteConfirmItem(item)}
                           title="Excluir Produto"
-                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors btn-press"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1030,6 +1033,19 @@ export default function InventoryPage({ user, showToast, onNavigateToReports }) 
         </div>
       )}
 
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      <ConfirmModal
+        isOpen={!!deleteConfirmItem}
+        title="Remover Produto do Estoque"
+        message={`Tem certeza que deseja remover permanentemente o item "${deleteConfirmItem?.produto}" (${deleteConfirmItem?.codigo}) do catálogo de estoque?`}
+        confirmText={isDeleting ? 'Excluindo...' : 'Sim, Excluir'}
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmItem(null)}
+      />
+
     </div>
   );
 }
+

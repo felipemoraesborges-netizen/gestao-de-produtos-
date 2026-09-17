@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3,
   TrendingUp,
   DollarSign,
   AlertTriangle,
-  Download,
   Printer,
   RotateCcw,
   FileSpreadsheet,
-  Package,
   Boxes,
   ShieldCheck,
-  Building2,
-  Calendar,
+  Download,
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -34,7 +31,7 @@ export default function ReportsPage({ user, showToast }) {
   const [loading, setLoading] = useState(true);
   const [dados, setDados] = useState(null);
 
-  const fetchDados = async () => {
+  const fetchDados = useCallback(async () => {
     try {
       setLoading(true);
       const res = await getDesempenhoRelatorio(user?.id);
@@ -44,11 +41,12 @@ export default function ReportsPage({ user, showToast }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, showToast]);
 
   useEffect(() => {
     fetchDados();
-  }, [user]);
+  }, [fetchDados]);
+
 
   const handleExportCsv = async () => {
     try {

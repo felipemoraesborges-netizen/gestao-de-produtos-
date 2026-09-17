@@ -10,7 +10,7 @@ import {
   Title,
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
-import { PieChart, BarChart2, TrendingUp, Sparkles } from 'lucide-react';
+import { PieChart, BarChart2, Sparkles } from 'lucide-react';
 
 ChartJS.register(
   ArcElement,
@@ -22,15 +22,19 @@ ChartJS.register(
   Title
 );
 
-export default function ChartsSection({ produtos, resumo }) {
+export default function ChartsSection({ produtos, resumo, theme = 'light' }) {
   if (!produtos || produtos.length === 0 || !resumo) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">
-        <Sparkles className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 p-8 text-center text-slate-400 dark:text-slate-500">
+        <Sparkles className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-zinc-600" />
         <p className="text-sm font-semibold">Envie arquivos XML para visualizar os gráficos e métricas analíticas.</p>
       </div>
     );
   }
+
+  const isDark = theme === 'dark' || document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#cbd5e1' : '#475569';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9';
 
   // 1. Dados para o Gráfico de Rosca: Composição dos Custos
   const totalBaseProdutos = produtos.reduce((acc, p) => acc + (p.valor_produtos || 0), 0);
@@ -52,7 +56,7 @@ export default function ChartsSection({ produtos, resumo }) {
           '#10b981', // Emerald
         ],
         borderWidth: 2,
-        borderColor: '#ffffff',
+        borderColor: isDark ? '#111722' : '#ffffff',
       },
     ],
   };
@@ -74,7 +78,7 @@ export default function ChartsSection({ produtos, resumo }) {
       {
         label: 'Custo Total (R$)',
         data: topLucro.map((p) => p.custo_final || 0),
-        backgroundColor: '#94a3b8',
+        backgroundColor: isDark ? '#475569' : '#94a3b8',
         borderRadius: 8,
       },
     ],
@@ -83,13 +87,15 @@ export default function ChartsSection({ produtos, resumo }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       {/* Gráfico 1: Composição dos Custos */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-sm p-6 transition-colors">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
-            <PieChart className="w-5 h-5 text-brand-600" />
-            <h3 className="text-sm font-bold text-slate-800">Composição Estrutural de Custos</h3>
+            <PieChart className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Composição Estrutural de Custos</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-400">Total: R$ {resumo.total_custo?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 font-mono">
+            Total: R$ {resumo.total_custo?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </span>
         </div>
         <div className="h-64 flex items-center justify-center">
           <Doughnut
@@ -102,6 +108,7 @@ export default function ChartsSection({ produtos, resumo }) {
                   position: 'bottom',
                   labels: {
                     boxWidth: 12,
+                    color: textColor,
                     font: { size: 11, family: 'Inter' },
                     padding: 12,
                   },
@@ -113,13 +120,13 @@ export default function ChartsSection({ produtos, resumo }) {
       </div>
 
       {/* Gráfico 2: Top Produtos mais Lucrativos */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 shadow-sm p-6 transition-colors">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-sm font-bold text-slate-800">Top Itens: Lucro vs Custo</h3>
+            <BarChart2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Top Itens: Lucro vs Custo</h3>
           </div>
-          <span className="text-xs font-semibold text-emerald-600">Top 6 Lucratividade</span>
+          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Top 6 Lucratividade</span>
         </div>
         <div className="h-64 flex items-center justify-center">
           <Bar
@@ -132,6 +139,7 @@ export default function ChartsSection({ produtos, resumo }) {
                   position: 'bottom',
                   labels: {
                     boxWidth: 12,
+                    color: textColor,
                     font: { size: 11, family: 'Inter' },
                   },
                 },
@@ -139,11 +147,11 @@ export default function ChartsSection({ produtos, resumo }) {
               scales: {
                 x: {
                   grid: { display: false },
-                  ticks: { font: { size: 10 } },
+                  ticks: { color: textColor, font: { size: 10 } },
                 },
                 y: {
-                  grid: { color: '#f1f5f9' },
-                  ticks: { font: { size: 10 } },
+                  grid: { color: gridColor },
+                  ticks: { color: textColor, font: { size: 10 } },
                 },
               },
             }}
@@ -153,3 +161,4 @@ export default function ChartsSection({ produtos, resumo }) {
     </div>
   );
 }
+

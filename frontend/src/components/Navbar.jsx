@@ -9,19 +9,27 @@ import {
   Building2,
   Boxes,
   ShieldCheck,
-  FileSpreadsheet,
-  AlertTriangle,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab, user, onLogout, alertaEstoqueCount = 0 }) {
+export default function Navbar({
+  activeTab,
+  setActiveTab,
+  user,
+  onLogout,
+  alertaEstoqueCount = 0,
+  theme = 'light',
+  onToggleTheme,
+}) {
   return (
-    <header className="sticky top-0 z-40 bg-navy-900/95 backdrop-blur-md border-b border-white/10 shadow-lg text-white">
+    <header className="sticky top-0 z-40 bg-slate-900/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-white/10 dark:border-zinc-800/80 shadow-md text-white transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20 text-white font-bold">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20 text-white font-bold transition-transform hover:scale-105">
               <Package className="w-5 h-5" />
             </div>
             <div>
@@ -33,15 +41,15 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
                   PRO
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">Estoque, Precificação & Auditoria</p>
+              <p className="text-[11px] text-slate-400 font-medium">Precificação, Estoque & NF-e</p>
             </div>
           </div>
 
           {/* Navigation Tabs (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+          <nav className="hidden lg:flex items-center gap-1 bg-white/5 dark:bg-zinc-900/80 p-1 rounded-xl border border-white/10 dark:border-zinc-800">
             <button
               onClick={() => setActiveTab('pricing')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'pricing'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -53,7 +61,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
 
             <button
               onClick={() => setActiveTab('inventory')}
-              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'inventory'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -70,7 +78,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
 
             <button
               onClick={() => setActiveTab('reports')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'reports'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -82,7 +90,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
 
             <button
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'history'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -94,7 +102,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
 
             <button
               onClick={() => setActiveTab('audit')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'audit'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -106,7 +114,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
 
             <button
               onClick={() => setActiveTab('profile')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 btn-press ${
                 activeTab === 'profile'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -117,11 +125,29 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
             </button>
           </nav>
 
-          {/* User Profile Badge & Logout */}
-          <div className="flex items-center gap-3">
+          {/* User Profile Badge, Theme Switch & Logout */}
+          <div className="flex items-center gap-2.5">
+            
+            {/* Theme Toggle Button */}
+            {onToggleTheme && (
+              <button
+                onClick={onToggleTheme}
+                title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 dark:bg-zinc-900/80 dark:hover:bg-zinc-800 text-slate-300 hover:text-white border border-white/10 dark:border-zinc-800 transition-all btn-press"
+                aria-label="Alternar tema de cor"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Moon className="w-4 h-4 text-slate-300" />
+                )}
+              </button>
+            )}
+
+            {/* Profile Pill */}
             <button
               onClick={() => setActiveTab('profile')}
-              className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 transition-all text-left group"
+              className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 dark:bg-zinc-900/80 dark:hover:bg-zinc-800 px-3 py-1.5 rounded-xl border border-white/10 dark:border-zinc-800 transition-all text-left group btn-press"
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm">
                 {user.nome ? user.nome.charAt(0).toUpperCase() : 'U'}
@@ -137,10 +163,11 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
               </div>
             </button>
 
+            {/* Logout Button */}
             <button
               onClick={onLogout}
               title="Sair do sistema"
-              className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition-all"
+              className="p-2 rounded-xl bg-white/5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 transition-all btn-press"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -149,10 +176,10 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
         </div>
 
         {/* Mobile Tab Bar */}
-        <div className="flex lg:hidden items-center justify-between pb-3 gap-1 overflow-x-auto text-xs">
+        <div className="flex lg:hidden items-center justify-between pb-3 gap-1 overflow-x-auto text-xs scrollbar-none">
           <button
             onClick={() => setActiveTab('pricing')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap btn-press ${
               activeTab === 'pricing' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -160,7 +187,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
           </button>
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap flex items-center gap-1 ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap flex items-center gap-1 btn-press ${
               activeTab === 'inventory' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -173,7 +200,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
           </button>
           <button
             onClick={() => setActiveTab('reports')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap btn-press ${
               activeTab === 'reports' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -181,7 +208,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap btn-press ${
               activeTab === 'history' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -189,7 +216,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
           </button>
           <button
             onClick={() => setActiveTab('audit')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap btn-press ${
               activeTab === 'audit' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -197,7 +224,7 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
           </button>
           <button
             onClick={() => setActiveTab('profile')}
-            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap ${
+            className={`py-1.5 px-2.5 rounded-lg font-medium whitespace-nowrap btn-press ${
               activeTab === 'profile' ? 'bg-brand-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -208,4 +235,5 @@ export default function Navbar({ activeTab, setActiveTab, user, onLogout, alerta
     </header>
   );
 }
+
 

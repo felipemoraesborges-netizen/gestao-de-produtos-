@@ -25,16 +25,28 @@ export default {
           800: '#0E2A47',
           900: '#091c30',
           950: '#05111d',
+        },
+        dark: {
+          card: '#12161f',
+          surface: '#0d1117',
+          border: '#232936',
+          muted: '#1e2430',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       boxShadow: {
         'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
         'premium': '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03)',
+        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        'glow-brand': '0 0 20px -5px rgba(12, 141, 228, 0.35)',
+        'glow-emerald': '0 0 20px -5px rgba(16, 185, 129, 0.35)',
+        'glow-indigo': '0 0 20px -5px rgba(99, 102, 241, 0.35)',
       }
     },
   },
   plugins: [],
 }
+

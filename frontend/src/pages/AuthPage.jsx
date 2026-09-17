@@ -51,7 +51,7 @@ export default function AuthPage({ onLoginSuccess, showToast }) {
       showToast('Por favor, preencha todos os campos obrigatórios (*).', 'error');
       return;
     }
-    if (!/^[a-zA-Z0-9_\.\-]+$/.test(cleanUser)) {
+    if (!/^[a-zA-Z0-9_.-]+$/.test(cleanUser)) {
       showToast('Nome de usuário inválido. Não utilize espaços, acentos ou símbolos como @.', 'error');
       return;
     }
