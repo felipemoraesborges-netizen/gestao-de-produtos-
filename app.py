@@ -400,7 +400,7 @@ def processar_metricas_revenda(
 
 # --- Configuração do Streamlit ---
 st.set_page_config(
-    page_title="Gestão de Produtos",
+    page_title="Gestão de Produtos • ERP & Precificação",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -408,16 +408,75 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    html, body, [class*="css"] { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
-    .block-container { padding-top: 2rem; padding-bottom: 3rem; }
-    h1 { color: #1B4F8C; font-weight: 700; border-bottom: 3px solid #1B4F8C; padding-bottom: 0.5rem; margin-bottom: 0.6rem; }
-    h2, h3 { color: #1B4F8C; font-weight: 600; margin-top: 1.8rem; }
-    [data-testid="stCaptionContainer"], .stCaption, small { color: #33475B !important; opacity: 1 !important; font-size: 0.92rem !important; }
-    section[data-testid="stSidebar"] { background-color: #0E2A47; }
-    section[data-testid="stSidebar"] * { color: #FFFFFF !important; opacity: 1 !important; }
-    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"], section[data-testid="stSidebar"] .stCaption, section[data-testid="stSidebar"] small { color: #C7D6E8 !important; opacity: 1 !important; }
-    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FFFFFF !important; border-bottom: none; }
-    section[data-testid="stSidebar"] .stCheckbox { background-color: rgba(255, 255, 255, 0.06); border-radius: 6px; padding: 2px 6px; margin-bottom: 2px; }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+    /* Reset e Tipografia Global */
+    html, body, [class*="css"], .stApp {
+        font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Fundo Temático Principal com Mesh Gradient Tecnológico */
+    .stApp {
+        background-color: #F8FAFC !important;
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.08) 0px, transparent 45%),
+            radial-gradient(at 100% 0%, rgba(14, 165, 233, 0.07) 0px, transparent 40%),
+            radial-gradient(at 50% 100%, rgba(99, 102, 241, 0.06) 0px, transparent 50%),
+            radial-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px) !important;
+        background-size: 100% 100%, 100% 100%, 100% 100%, 24px 24px !important;
+        background-attachment: fixed !important;
+    }
+
+    .block-container {
+        padding-top: 1.8rem;
+        padding-bottom: 3.5rem;
+        max-width: 1400px;
+    }
+
+    /* Títulos e Tipografia */
+    h1 {
+        color: #0F2744 !important;
+        font-weight: 800 !important;
+        font-size: 1.85rem !important;
+        letter-spacing: -0.02em !important;
+        margin-bottom: 0.4rem !important;
+    }
+    h2, h3 {
+        color: #1E3A8A !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.01em !important;
+    }
+    p, span, label {
+        color: #334155;
+    }
+    [data-testid="stCaptionContainer"], .stCaption, small {
+        color: #64748B !important;
+        font-size: 0.88rem !important;
+    }
+
+    /* Sidebar Temática Escura e Moderna */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #07152B 0%, #0A1E38 50%, #0E2A4E 100%) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    }
+    section[data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+    section[data-testid="stSidebar"] .stCaption,
+    section[data-testid="stSidebar"] small {
+        color: #94A3B8 !important;
+    }
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #FFFFFF !important;
+        border-bottom: none !important;
+        font-weight: 700 !important;
+    }
+
+    /* Inputs na Sidebar */
     section[data-testid="stSidebar"] input,
     section[data-testid="stSidebar"] textarea,
     section[data-testid="stSidebar"] [data-baseweb="input"] input,
@@ -425,50 +484,232 @@ st.markdown("""
     section[data-testid="stSidebar"] [data-testid="stNumberInput"] input {
         background-color: rgba(255, 255, 255, 0.12) !important;
         color: #FFFFFF !important;
-        border: 1px solid rgba(255, 255, 255, 0.25) !important;
-        border-radius: 6px !important;
+        border: 1px solid rgba(255, 255, 255, 0.22) !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+    }
+    section[data-testid="stSidebar"] input:focus,
+    section[data-testid="stSidebar"] [data-baseweb="input"]:focus-within {
+        border-color: #38BDF8 !important;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
     }
     section[data-testid="stSidebar"] [data-baseweb="input"],
-    section[data-testid="stSidebar"] [data-baseweb="base-input"],
+    section[data-testid="stSidebar"] [data-baseweb="base-input"] {
+        background-color: transparent !important;
+        border: none !important;
+    }
     section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-        background-color: rgba(255, 255, 255, 0.10) !important;
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border: 1.5px dashed rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        padding: 1rem !important;
+        transition: all 0.2s ease !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"]:hover {
+        background-color: rgba(255, 255, 255, 0.14) !important;
+        border-color: #38BDF8 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+        background: linear-gradient(135deg, #2563EB, #0284C7) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    section[data-testid="stSidebar"] .stCheckbox {
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 4px 10px;
+        margin-bottom: 4px;
+        transition: background 0.15s ease;
+    }
+    section[data-testid="stSidebar"] .stCheckbox:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background-color: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
         border: 1px solid rgba(255, 255, 255, 0.25) !important;
         border-radius: 8px !important;
     }
-    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] * { color: #FFFFFF !important; }
-    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
-        background-color: rgba(255,255,255,0.2) !important;
+
+    /* Cards de Métricas Premium */
+    div[data-testid="stMetric"] {
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 4px solid #2563EB !important;
+        border-radius: 12px !important;
+        padding: 1.1rem 1.3rem !important;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08) !important;
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #64748B !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #0F172A !important;
+        font-weight: 800 !important;
+        font-size: 1.65rem !important;
+    }
+
+    /* Botões Modernos com Gradiente */
+    .stButton button, .stDownloadButton button {
+        background: linear-gradient(135deg, #1E40AF 0%, #0284C7 100%) !important;
         color: #FFFFFF !important;
-        border: 1px solid rgba(255,255,255,0.35) !important;
+        border: none !important;
+        border-radius: 9px !important;
+        font-weight: 600 !important;
+        padding: 0.55rem 1.4rem !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25) !important;
+        transition: all 0.2s ease !important;
     }
-    section[data-testid="stSidebar"] input::placeholder { color: rgba(255,255,255,0.45) !important; }
-    section[data-testid="stSidebar"] [data-baseweb="select"] > div,
-    section[data-testid="stSidebar"] [data-baseweb="select"] input {
-        background-color: rgba(255, 255, 255, 0.12) !important;
+    .stButton button:hover, .stDownloadButton button:hover {
+        background: linear-gradient(135deg, #1D4ED8 0%, #0369A1 100%) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 16px rgba(2, 132, 199, 0.35) !important;
         color: #FFFFFF !important;
-        border-color: rgba(255,255,255,0.25) !important;
     }
-    div[data-testid="stMetric"] { background-color: #F0F4F8; border: 1px solid #D6E0EA; border-left: 5px solid #1B4F8C; border-radius: 8px; padding: 1rem 1.2rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); }
-    div[data-testid="stMetricLabel"] { color: #4A5A6A; font-weight: 600; }
-    div[data-testid="stMetricValue"] { color: #1B4F8C; font-weight: 700; }
-    .stButton button, .stDownloadButton button { background-color: #1B4F8C; color: white; border-radius: 6px; border: none; font-weight: 600; padding: 0.5rem 1.2rem; }
-    .stButton button:hover, .stDownloadButton button:hover { background-color: #163F70; color: white; }
-    div[data-testid="stAlert"] { border-radius: 8px; }
-    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] { border: 1px solid #D6E0EA; border-radius: 8px; overflow: hidden; }
-    hr { border-top: 1px solid #D6E0EA; }
-    .user-profile-badge {
-        background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 10px;
-        padding: 12px;
-        margin-bottom: 15px;
+
+    /* Tabelas e Dataframes */
+    div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04) !important;
     }
-    .auth-card {
-        background-color: #FFFFFF;
-        border: 1px solid #D6E0EA;
+
+    /* Abas / Tabs Estilizadas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(241, 245, 249, 0.8);
+        padding: 6px;
         border-radius: 12px;
+        border: 1px solid #E2E8F0;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 18px;
+        font-weight: 600;
+        color: #475569;
+        transition: all 0.2s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: #1E40AF !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Componentes Customizados */
+    .user-profile-badge {
+        background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 16px;
+        backdrop-filter: blur(8px);
+    }
+    .theme-banner {
+        background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 60%, #0284C7 100%);
+        border-radius: 16px;
+        padding: 1.6rem 2rem;
+        color: #FFFFFF;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        margin-bottom: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .stepper-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 0.9rem 1.4rem;
+        margin-bottom: 1.4rem;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+    }
+    .step-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: #64748B;
+    }
+    .step-pill.active {
+        color: #1E40AF;
+    }
+    .step-circle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: #E2E8F0;
+        color: #475569;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+    .step-pill.active .step-circle {
+        background: #2563EB;
+        color: #FFFFFF;
+        box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+    }
+    .step-sep {
+        color: #CBD5E1;
+        font-weight: 700;
+    }
+    .feature-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 1.3rem;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+        margin-bottom: 1rem;
+        transition: transform 0.2s ease;
+    }
+    .feature-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
+    }
+    .auth-hero-box {
+        background: linear-gradient(135deg, #07152B 0%, #0F2A4A 100%);
+        border-radius: 18px;
+        padding: 2.2rem;
+        color: #FFFFFF;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        height: 100%;
+    }
+    .auth-form-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 18px;
         padding: 2rem;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+    }
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(16, 185, 129, 0.1);
+        color: #059669;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.78rem;
+        font-weight: 600;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -491,19 +732,60 @@ if st.session_state["usuario"] is not None:
 # TELA DE LOGIN / REGISTRO (Não Autenticado)
 # ==========================================
 if st.session_state["usuario"] is None:
-    col_l, col_m, col_r = st.columns([1, 2, 1])
-    with col_m:
-        st.markdown("<h1 style='text-align: center; border-bottom: none;'>📦 Gestão de Produtos</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #4A5A6A; font-size: 1.1rem; margin-bottom: 1.5rem;'>Acesse sua conta para gerenciar NF-e, custos e preços de revenda</p>", unsafe_allow_html=True)
+    col_hero, col_form = st.columns([1.1, 1], gap="large")
 
+    with col_hero:
+        st.markdown("""
+            <div class="auth-hero-box">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                    <span style="font-size: 2rem;">📦</span>
+                    <div>
+                        <div style="font-size: 1.4rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.02em;">Gestão de Produtos</div>
+                        <div style="font-size: 0.82rem; color: #38BDF8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">ERP & Precificação Inteligente</div>
+                    </div>
+                </div>
+                <h2 style="color: #FFFFFF !important; font-size: 1.55rem; font-weight: 700; line-height: 1.3; margin-bottom: 1rem;">
+                    Transforme seus XMLs de NF-e em preços de venda lucrativos e custos precisos.
+                </h2>
+                <p style="color: #CBD5E1; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.8rem;">
+                    Sistema corporativo para automação de entrada de notas fiscais, rateio de frete, impostos (ST, IPI, PIS/COFINS), margem markup e precificação unitária.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: flex-start; gap: 10px; background: rgba(255,255,255,0.06); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                        <span style="font-size: 1.2rem;">⚡</span>
+                        <div>
+                            <div style="color: #FFFFFF; font-weight: 600; font-size: 0.9rem;">Importação de XML Automática</div>
+                            <div style="color: #94A3B8; font-size: 0.8rem;">Lê múltiplos arquivos em segundos e extrai todos os itens e tributos.</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: flex-start; gap: 10px; background: rgba(255,255,255,0.06); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                        <span style="font-size: 1.2rem;">🎯</span>
+                        <div>
+                            <div style="color: #FFFFFF; font-weight: 600; font-size: 0.9rem;">Formação de Preço & Markup</div>
+                            <div style="color: #94A3B8; font-size: 0.8rem;">Controle de custo real por unidade, embalagem e margem de lucro.</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: flex-start; gap: 10px; background: rgba(255,255,255,0.06); padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);">
+                        <span style="font-size: 1.2rem;">📁</span>
+                        <div>
+                            <div style="color: #FFFFFF; font-weight: 600; font-size: 0.9rem;">Histórico e Revisão de Notas</div>
+                            <div style="color: #94A3B8; font-size: 0.8rem;">Edite e recalcule qualquer nota já salva com total flexibilidade.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col_form:
+        st.markdown('<div class="auth-form-card">', unsafe_allow_html=True)
         tab_login, tab_cadastro = st.tabs(["🔑 Entrar no Sistema", "📝 Criar Nova Conta"])
 
         with tab_login:
             with st.form("form_login"):
-                st.subheader("Login")
+                st.markdown("<h3 style='margin-top:0.5rem;'>Acessar Conta</h3>", unsafe_allow_html=True)
                 identificador = st.text_input("Usuário ou E-mail", placeholder="ex: felipe ou felipe@empresa.com")
-                senha = st.text_input("Senha", type="password", placeholder="Sua senha")
-                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
+                senha = st.text_input("Senha", type="password", placeholder="Sua senha de acesso")
+                btn_entrar = st.form_submit_button("🚀 Entrar no Sistema", use_container_width=True)
 
                 if btn_entrar:
                     sucesso, resultado = auth.autenticar_usuario(identificador, senha)
@@ -516,7 +798,7 @@ if st.session_state["usuario"] is None:
 
         with tab_cadastro:
             with st.form("form_cadastro"):
-                st.subheader("Cadastre-se")
+                st.markdown("<h3 style='margin-top:0.5rem;'>Criar Conta</h3>", unsafe_allow_html=True)
                 col_c1, col_c2 = st.columns(2)
                 with col_c1:
                     nome = st.text_input("Nome Completo *", placeholder="ex: Felipe Moraes")
@@ -528,9 +810,8 @@ if st.session_state["usuario"] is None:
                     senha_cad = st.text_input("Senha (mínimo 6 caracteres) *", type="password")
 
                 senha_conf = st.text_input("Confirmar Senha *", type="password")
-
-                st.caption("Suas preferências de precificação padrão poderão ser editadas a qualquer momento em seu perfil.")
-                btn_cadastrar = st.form_submit_button("Criar Conta", use_container_width=True)
+                st.caption("Você poderá configurar seus padrões de markup e impostos a qualquer momento.")
+                btn_cadastrar = st.form_submit_button("✨ Criar Minha Conta", use_container_width=True)
 
                 if btn_cadastrar:
                     if senha_cad != senha_conf:
@@ -548,6 +829,7 @@ if st.session_state["usuario"] is None:
                             st.success(msg + " Você já pode fazer login na aba 'Entrar no Sistema'.")
                         else:
                             st.error(msg)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     # ==========================================
@@ -586,9 +868,6 @@ else:
     # ABA 1: GESTÃO & PRECIFICAÇÃO
     # ==========================================
     if menu_selecionado == "📦 Gestão & Precificação":
-        st.title("📦 Gestão de Produtos e Precificação")
-        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Importe XMLs de NF-e, calcule custos automáticos e defina preços de revenda com base no seu perfil.</p>", unsafe_allow_html=True)
-
         # Configurações na Barra Lateral (inicializadas com as preferências salvas no perfil)
         pref_markup = float(usuario_logado.get("markup_padrao", 60.0))
         pref_custo_adicional = float(usuario_logado.get("custo_adicional_padrao", 0.0))
@@ -642,6 +921,54 @@ else:
                     st.sidebar.success("Preferências salvas como padrão do seu perfil!")
                 else:
                     st.sidebar.error(msg)
+
+        # Banner Temático Principal
+        st.markdown(f"""
+            <div class="theme-banner">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+                    <div>
+                        <div class="status-pill" style="margin-bottom: 8px;">🟢 Módulo de Precificação Ativo</div>
+                        <h1 style="color: #FFFFFF !important; margin: 0 0 6px 0; font-size: 1.7rem; font-weight: 800;">
+                            📦 Gestão de Produtos & Precificação Inteligente
+                        </h1>
+                        <p style="color: #E2E8F0; margin: 0; font-size: 0.95rem;">
+                            Importe seus XMLs de NF-e, rateie custos tributários e calcule margens de revenda em tempo real.
+                        </p>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; padding: 10px 18px; text-align: right; backdrop-filter: blur(8px);">
+                        <div style="font-size: 0.78rem; color: #93C5FD; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Markup Atual</div>
+                        <div style="font-size: 1.45rem; font-weight: 800; color: #FFFFFF;">{markup:.1f}%</div>
+                    </div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # Stepper de Fluxo Intuitivo
+        tem_xml = bool(arquivos)
+        s1 = "active"
+        s2 = "active" if tem_xml else ""
+        s3 = "active" if tem_xml else ""
+        s4 = "active" if tem_xml else ""
+
+        st.markdown(f"""
+            <div class="stepper-container">
+                <div class="step-pill {s1}">
+                    <span class="step-circle">1</span> 📤 1. Upload XML
+                </div>
+                <div class="step-sep">➔</div>
+                <div class="step-pill {s2}">
+                    <span class="step-circle">2</span> ⚙️ 2. Impostos & Custos
+                </div>
+                <div class="step-sep">➔</div>
+                <div class="step-pill {s3}">
+                    <span class="step-circle">3</span> 📦 3. Embalagem & Markup
+                </div>
+                <div class="step-sep">➔</div>
+                <div class="step-pill {s4}">
+                    <span class="step-circle">4</span> 📊 4. Lucro & Exportação
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
         # Carrega índice existente
         indice = carregar_indice(usuario_id=usuario_logado["id"])
@@ -700,11 +1027,36 @@ else:
             return todos_produtos, novas_notas, avisos, erros
 
         if not arquivos:
-            st.info("💡 Envie um ou mais arquivos XML de NF-e na barra lateral para iniciar o processamento de custos e formação de preços.")
+            # Guia Rápido Intuitivo
+            st.markdown("""
+                <div style="background: #FFFFFF; border: 1.5px dashed #CBD5E1; border-radius: 16px; padding: 2.2rem; text-align: center; margin-bottom: 1.8rem; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);">
+                    <div style="font-size: 3rem; margin-bottom: 0.6rem;">📥</div>
+                    <h3 style="color: #0F2744; margin: 0 0 0.5rem 0; font-weight: 700;">Envie seus XMLs na barra lateral para começar</h3>
+                    <p style="color: #64748B; max-width: 620px; margin: 0 auto 1.6rem auto; font-size: 0.95rem; line-height: 1.5;">
+                        Selecione um ou mais arquivos XML de Notas Fiscais na barra à esquerda. O sistema processará impostos, rateará frete e formará seus preços automaticamente.
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; text-align: left; max-width: 820px; margin: 0 auto;">
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; padding: 16px; border-radius: 12px;">
+                            <div style="font-size: 1.2rem; margin-bottom: 6px;">📑</div>
+                            <div style="font-weight: 700; color: #1E40AF; margin-bottom: 4px; font-size: 0.92rem;">1. Escolha o XML</div>
+                            <div style="font-size: 0.83rem; color: #64748B;">Aceita múltiplos arquivos simultâneos emitidos pelos fornecedores.</div>
+                        </div>
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; padding: 16px; border-radius: 12px;">
+                            <div style="font-size: 1.2rem; margin-bottom: 6px;">⚡</div>
+                            <div style="font-weight: 700; color: #1E40AF; margin-bottom: 4px; font-size: 0.92rem;">2. Defina Markup & Custos</div>
+                            <div style="font-size: 0.83rem; color: #64748B;">Ajuste impostos recuperáveis ou de custo e despesas extras por unidade.</div>
+                        </div>
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; padding: 16px; border-radius: 12px;">
+                            <div style="font-size: 1.2rem; margin-bottom: 6px;">📊</div>
+                            <div style="font-weight: 700; color: #1E40AF; margin-bottom: 4px; font-size: 0.92rem;">3. Baixe a Planilha</div>
+                            <div style="font-size: 0.83rem; color: #64748B;">Exporte instantaneamente para Excel com todas as colunas de formação.</div>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
             # Exibe resumo do histórico recente
             if indice:
-                st.divider()
                 st.subheader("📋 Últimas notas fiscais processadas")
                 df_historico_recente = pd.DataFrame(list(indice.values())).head(5)
                 cols_recentes = [c for c in ["numero", "serie", "fornecedor", "data_emissao", "valor_total", "data_importacao"] if c in df_historico_recente.columns]
@@ -728,9 +1080,8 @@ else:
             else:
                 df = pd.DataFrame(produtos_extraidos)
 
-                st.divider()
                 st.subheader("🔢 1. Ajuste de Unidades Reais por Embalagem")
-                st.caption("Caso o produto tenha sido comprado em caixa/fardo e você revenda individualmente, ajuste a quantidade por embalagem.")
+                st.caption("💡 Se você comprou caixas ou fardos e vende unidades avulsas, informe a quantidade contida em cada embalagem para recalcular o custo unitário real.")
 
                 df["ID_temp"] = df["Código"].astype(str) + "_" + df["Arquivo XML"].astype(str)
 
@@ -761,12 +1112,12 @@ else:
                 )
                 df = df.drop(columns=["ID_temp"])
 
-                # Métricas em destaque
+                # Métricas em destaque com Cards Estilizados
                 st.divider()
                 st.subheader("📊 2. Resumo Consolidado dos Produtos")
 
                 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-                col_m1.metric("Qtd. Itens Únicos", f"{len(df)}")
+                col_m1.metric("Qtd. Itens Únicos", f"{len(df)} itens")
                 col_m2.metric("Custo Total Acumulado", f"R$ {df['Custo final'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 col_m3.metric("Faturamento Estimado", f"R$ {df['Total de revenda'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                 col_m4.metric("Lucro Bruto Estimado", f"R$ {df['Lucro total'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -788,8 +1139,17 @@ else:
     # ABA 2: HISTÓRICO DE NF-E
     # ==========================================
     elif menu_selecionado == "📁 Histórico de NF-e":
-        st.title("📁 Histórico de Notas Fiscais Importadas")
-        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Consulte todas as NF-e vinculadas à sua conta, revise os produtos e edite as configurações de precificação.</p>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class="theme-banner">
+                <div class="status-pill" style="margin-bottom: 8px;">📁 Base de Dados Segura</div>
+                <h1 style="color: #FFFFFF !important; margin: 0 0 6px 0; font-size: 1.7rem; font-weight: 800;">
+                    📁 Histórico de Notas Fiscais Importadas
+                </h1>
+                <p style="color: #E2E8F0; margin: 0; font-size: 0.95rem;">
+                    Consulte todas as NF-e vinculadas à sua conta, revise os itens tributários e recalcule as precificações.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
         indice = carregar_indice(usuario_id=usuario_logado["id"])
 
@@ -799,9 +1159,9 @@ else:
             df_hist = pd.DataFrame(list(indice.values())).sort_values("data_importacao", ascending=False)
 
             col_h1, col_h2, col_h3 = st.columns(3)
-            col_h1.metric("Total de Notas Importadas", f"{len(df_hist)}")
+            col_h1.metric("Total de Notas Importadas", f"{len(df_hist)} NF-es")
             col_h2.metric("Valor Total Acumulado", f"R$ {df_hist['valor_total'].sum():,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            col_h3.metric("Fornecedores Atendidos", f"{df_hist['fornecedor'].nunique()}")
+            col_h3.metric("Fornecedores Atendidos", f"{df_hist['fornecedor'].nunique()} parceiros")
 
             st.divider()
             st.subheader("Filtros")
@@ -975,8 +1335,17 @@ else:
     # ABA 3: MEU PERFIL E SALVAMENTO DE CONFIGURAÇÕES
     # ==========================================
     elif menu_selecionado == "👤 Meu Perfil":
-        st.title("👤 Meu Perfil e Preferências")
-        st.markdown("<p style='color:#4A5A6A; font-size:1.05rem; margin-top:-0.8rem;'>Gerencie seus dados de acesso, informações da empresa e salve suas preferências padrão de cálculo.</p>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class="theme-banner">
+                <div class="status-pill" style="margin-bottom: 8px;">👤 Conta de Usuário</div>
+                <h1 style="color: #FFFFFF !important; margin: 0 0 6px 0; font-size: 1.7rem; font-weight: 800;">
+                    👤 Meu Perfil & Preferências Padrão
+                </h1>
+                <p style="color: #E2E8F0; margin: 0; font-size: 0.95rem;">
+                    Gerencie seus dados corporativos de acesso e personalize os valores padrão de markup e impostos.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
         tab_dados, tab_preferencias, tab_seguranca = st.tabs([
             "📋 Dados Cadastrais",
