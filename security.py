@@ -29,11 +29,14 @@ load_dotenv()
 # ==========================================
 # CONFIGURAÇÕES DE SEGURANÇA E AMBIENTE
 # ==========================================
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
+ON_VERCEL = os.getenv("VERCEL") == "1"
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production" if ON_VERCEL else "development").strip().lower()
 
 # Segredo criptográfico para assinatura dos tokens JWT
 _SECRET_FROM_ENV = os.getenv("SECRET_KEY", "").strip()
 if not _SECRET_FROM_ENV:
+    if ON_VERCEL or ENVIRONMENT == "production":
+        raise RuntimeError("Configure SECRET_KEY antes de iniciar em produção.")
     # Se não configurado em dev, gera uma chave estável para a sessão com aviso
     _TEMP_SECRET = secrets.token_hex(32)
     SECRET_KEY = _TEMP_SECRET
@@ -63,6 +66,9 @@ _ORIGINS_RAW = os.getenv(
 ALLOWED_ORIGINS = [orig.strip() for orig in _ORIGINS_RAW.split(",") if orig.strip()]
 
 DB_PATH = os.getenv("DATABASE_PATH", "banco_notas.db")
+USE_POSTGRES = bool(os.getenv("DATABASE_URL"))
+if ON_VERCEL and not USE_POSTGRES:
+    raise RuntimeError("Configure DATABASE_URL para conectar a Vercel ao Supabase.")
 
 # Esquema de autenticação Bearer
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -77,14 +83,20 @@ _SQLITE_TIMEOUT_SECONDS = float(os.getenv("SQLITE_TIMEOUT_SECONDS", "30"))
 _wal_configurado: set = set()
 
 
-def get_db_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
+def get_db_connection(db_path: str = DB_PATH):
     """
     Cria uma conexão SQLite padronizada para todo o projeto, com:
     - timeout alto (evita estourar 'database is locked' em picos de concorrência)
     - modo WAL habilitado (permite leituras concorrentes com escrita em andamento)
     - busy_timeout no próprio SQLite (reforça o timeout também no nível do motor)
     """
+    if USE_POSTGRES:
+        from postgres_db import connect
+
+        return connect()
+
     conn = sqlite3.connect(db_path, timeout=_SQLITE_TIMEOUT_SECONDS)
+    conn.row_factory = sqlite3.Row
     if db_path not in _wal_configurado:
         try:
             conn.execute("PRAGMA journal_mode=WAL")
@@ -183,7 +195,6 @@ async def get_current_user(
 
     # Consulta usuário no banco
     conn = get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM usuarios WHERE id = ?", (user_id,))
     linha = cursor.fetchone()
@@ -360,7 +371,51 @@ class RateLimiterLogin:
             self._bloqueios_usuario[id_limpo] = agora + janela
 
 
-login_rate_limiter = RateLimiterLogin()
+class PostgresLoginRateLimiter:
+    """Share the login failure window across Vercel instances."""
+
+    def verificar_limite(self, ip: str, identificador: str) -> Tuple[bool, int]:
+        agora = time.time()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT MAX(bloqueado_ate) AS limite FROM tentativas_login WHERE chave IN (?, ?)",
+                (f"ip:{ip}", f"usuario:{identificador.strip().lower()}"),
+            )
+            limite = cursor.fetchone()["limite"] or 0
+        return limite > agora, max(0, int(limite - agora))
+
+    def registrar_tentativa(self, ip: str, identificador: str, sucesso: bool) -> None:
+        agora = time.time()
+        janela = LOGIN_LOCKOUT_MINUTES * 60
+        chaves = (f"ip:{ip}", f"usuario:{identificador.strip().lower()}")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            if sucesso:
+                cursor.execute("DELETE FROM tentativas_login WHERE chave IN (?, ?)", chaves)
+                return
+
+            for chave in chaves:
+                cursor.execute(
+                    "INSERT INTO tentativas_login (chave) VALUES (?) ON CONFLICT DO NOTHING",
+                    (chave,),
+                )
+                cursor.execute(
+                    "SELECT falhas, bloqueado_ate FROM tentativas_login WHERE chave = ? FOR UPDATE",
+                    (chave,),
+                )
+                registro = cursor.fetchone()
+                falhas = [t for t in registro["falhas"] if t > agora - janela] + [agora]
+                bloqueado_ate = registro["bloqueado_ate"]
+                if len(falhas) >= MAX_LOGIN_ATTEMPTS:
+                    bloqueado_ate = agora + janela
+                cursor.execute(
+                    "UPDATE tentativas_login SET falhas = ?, bloqueado_ate = ? WHERE chave = ?",
+                    (falhas, bloqueado_ate, chave),
+                )
+
+
+login_rate_limiter = PostgresLoginRateLimiter() if USE_POSTGRES else RateLimiterLogin()
 
 
 # ==========================================

@@ -1,0 +1,5 @@
+[tool.vercel]
+entrypoint = "server:app"
+
+[tool.vercel.scripts]
+build = "npm --prefix frontend ci && VITE_VERCEL_DEPLOYMENT=1 npm --prefix frontend run build"
