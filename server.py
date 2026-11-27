@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
 from defusedxml import ElementTree as ET
 from xml.etree.ElementTree import Element
+from uuid import UUID
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -80,6 +81,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 # 4. INICIALIZAÇÃO DE BANCO E ÍNDICES
 # ==========================================
 def inicializar_banco() -> None:
+    if security.USE_POSTGRES:
+        return
+
     os.makedirs(PASTA_XMLS_PROCESSADOS, exist_ok=True)
     conn = security.get_db_connection(DB_PATH)
     cursor = conn.cursor()
@@ -642,7 +646,6 @@ async def upload_xmls(
 
     # Carrega histórico exclusivo do usuário autenticado
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT chave_acesso FROM historico_nfe WHERE usuario_id = ?", (current_user["id"],))
     chaves_usuario = {row["chave_acesso"] for row in cursor.fetchall()}
@@ -699,9 +702,10 @@ async def upload_xmls(
 
         if chave_acesso:
             nome_salvo = nome_arquivo_padronizado(chave_acesso, metadados, current_user["id"])
-            caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nome_salvo)
-            with open(caminho_salvo, "wb") as f_out:
-                f_out.write(conteudo_bytes)
+            if not security.USE_POSTGRES:
+                caminho_salvo = os.path.join(PASTA_XMLS_PROCESSADOS, nome_salvo)
+                with open(caminho_salvo, "wb") as f_out:
+                    f_out.write(conteudo_bytes)
 
             nova_nota = {
                 "chave_acesso": chave_acesso,
@@ -719,13 +723,28 @@ async def upload_xmls(
 
             conn = security.get_db_connection(DB_PATH)
             c = conn.cursor()
-            c.execute("""
-                INSERT OR REPLACE INTO historico_nfe 
-                (chave_acesso, numero, serie, data_emissao, fornecedor, cnpj_emit, valor_total, arquivo_original, arquivo_salvo, data_importacao, usuario_id)
-                VALUES (:chave_acesso, :numero, :serie, :data_emissao, :fornecedor, :cnpj_emit, :valor_total, :arquivo_original, :arquivo_salvo, :data_importacao, :usuario_id)
-            """, nova_nota)
+            colunas = ", ".join(nova_nota)
+            marcadores = ", ".join("?" for _ in nova_nota)
+            valores = tuple(nova_nota.values())
+            if security.USE_POSTGRES:
+                c.execute(
+                    f"INSERT INTO historico_nfe ({colunas}, xml_original) VALUES ({marcadores}, ?) "
+                    "ON CONFLICT (usuario_id, chave_acesso) DO NOTHING",
+                    (*valores, conteudo_bytes),
+                )
+                gravada = c.rowcount == 1
+            else:
+                c.execute(
+                    f"INSERT OR REPLACE INTO historico_nfe ({colunas}) VALUES ({marcadores})",
+                    valores,
+                )
+                gravada = True
             conn.commit()
             conn.close()
+            if not gravada:
+                del todos_produtos[-len(produtos):]
+                avisos.append(f"Nota {metadados.get('numero', '')} ({file.filename}) já havia sido importada anteriormente.")
+                continue
 
             notas_processadas.append(nova_nota)
             chaves_usuario.add(chave_acesso)
@@ -745,6 +764,85 @@ async def upload_xmls(
         "avisos": avisos,
         "erros": erros,
     }
+
+
+# Keep large batches below Vercel's individual function request limit.
+XML_CHUNK_BYTES = 3 * 1024 * 1024
+
+
+class XmlUploadFile(BaseModel):
+    nome: str
+    partes: int = Field(ge=1, le=(security.MAX_UPLOAD_BYTES + XML_CHUNK_BYTES - 1) // XML_CHUNK_BYTES)
+
+
+class XmlUploadBatch(BaseModel):
+    arquivos: List[XmlUploadFile]
+    impostos_selecionados: List[str]
+
+
+@app.put("/api/nfe/upload-parts/{lote}/{arquivo}/{parte}")
+async def save_xml_part(
+    lote: UUID,
+    arquivo: int,
+    parte: int,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(security.get_current_user),
+):
+    if not security.USE_POSTGRES:
+        raise HTTPException(status_code=404, detail="Envio em partes indisponível.")
+    if not (0 <= arquivo < security.MAX_FILES_PER_UPLOAD
+            and 0 <= parte < (security.MAX_UPLOAD_BYTES + XML_CHUNK_BYTES - 1) // XML_CHUNK_BYTES):
+        raise HTTPException(status_code=400, detail="Parte do arquivo inválida.")
+    conteudo = await request.body()
+    if not 0 < len(conteudo) <= XML_CHUNK_BYTES:
+        raise HTTPException(status_code=400, detail="Tamanho da parte inválido.")
+
+    with security.get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM nfe_upload_partes WHERE expira_em <= now()")
+        cursor.execute("""
+            INSERT INTO nfe_upload_partes (usuario_id, lote, arquivo, parte, conteudo)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (usuario_id, lote, arquivo, parte)
+            DO UPDATE SET conteudo = EXCLUDED.conteudo, expira_em = EXCLUDED.expira_em
+        """, (current_user["id"], lote, arquivo, parte, conteudo))
+    return Response(status_code=204)
+
+
+@app.post("/api/nfe/upload-parts/{lote}")
+async def finish_xml_upload(
+    lote: UUID,
+    req: XmlUploadBatch,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(security.get_current_user),
+):
+    if not security.USE_POSTGRES:
+        raise HTTPException(status_code=404, detail="Envio em partes indisponível.")
+    if not 0 < len(req.arquivos) <= security.MAX_FILES_PER_UPLOAD:
+        raise HTTPException(status_code=400, detail="Quantidade de arquivos inválida.")
+
+    files = []
+    usuario_id = current_user["id"]
+    with security.get_db_connection() as conn:
+        cursor = conn.cursor()
+        for indice, arquivo in enumerate(req.arquivos):
+            cursor.execute("""
+                SELECT parte, conteudo FROM nfe_upload_partes
+                WHERE usuario_id = ? AND lote = ? AND arquivo = ? AND expira_em > now()
+                ORDER BY parte
+            """, (usuario_id, lote, indice))
+            partes = cursor.fetchall()
+            if [row["parte"] for row in partes] != list(range(arquivo.partes)):
+                raise HTTPException(status_code=400, detail="O envio do XML está incompleto. Tente novamente.")
+            conteudo = b"".join(row["conteudo"] for row in partes)
+            security.validar_conteudo_xml(conteudo)
+            files.append(UploadFile(io.BytesIO(conteudo), filename=arquivo.nome))
+
+    resultado = await upload_xmls(request, files, json.dumps(req.impostos_selecionados), current_user)
+    with security.get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM nfe_upload_partes WHERE usuario_id = ? AND lote = ?", (usuario_id, lote))
+    return resultado
 
 
 @app.post("/api/nfe/calculate")
@@ -800,7 +898,7 @@ def recalculate(req: CalculoRequest, current_user: Dict[str, Any] = Depends(secu
             "custo_unitario_final": round(custo_unitario_final, 2),
             "preco_revenda_unitario": round(preco_revenda_unitario, 2),
             "total_revenda": round(total_revenda, 2),
-            "lucro_unitario": round(lucro_unit, 2),
+            "lucro_unitario": round(lucro_unitario, 2),
             "lucro_total": round(lucro_total, 2),
             "margem_lucro_pct": round(margem_lucro_pct, 2),
         })
@@ -831,10 +929,11 @@ def recalculate(req: CalculoRequest, current_user: Dict[str, Any] = Depends(secu
 def get_history(current_user: Dict[str, Any] = Depends(security.get_current_user)):
     # Isolamento estrito de dados por usuário autenticado
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM historico_nfe 
+        SELECT chave_acesso, numero, serie, data_emissao, fornecedor, cnpj_emit,
+               valor_total, arquivo_original, arquivo_salvo, data_importacao, usuario_id
+        FROM historico_nfe 
         WHERE usuario_id = ? 
         ORDER BY data_importacao DESC
     """, (current_user["id"],))
@@ -905,7 +1004,6 @@ def get_estoque(
     current_user: Dict[str, Any] = Depends(security.get_current_user),
 ):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM estoque_produtos 
@@ -1023,20 +1121,21 @@ def save_estoque_item(
         return {"message": "Produto de estoque atualizado com sucesso!"}
     else:
         try:
+            returning_id = " RETURNING id" if security.USE_POSTGRES else ""
             cursor.execute("""
                 INSERT INTO estoque_produtos (
                     codigo, produto, unidade, quantidade_atual, estoque_minimo,
                     custo_unitario, preco_venda, fornecedor_ultimo, categoria,
                     usuario_id, criado_em, atualizado_em
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            """ + returning_id, (
                 req.codigo.strip(), req.produto.strip(), req.unidade.strip() or "UN",
                 float(req.quantidade_atual), float(req.estoque_minimo),
                 float(req.custo_unitario), float(req.preco_venda),
                 req.fornecedor_ultimo or "", req.categoria or "Geral",
                 current_user["id"], agora, agora
             ))
-            novo_id = cursor.lastrowid
+            novo_id = cursor.fetchone()["id"] if security.USE_POSTGRES else cursor.lastrowid
 
             if req.quantidade_atual > 0:
                 cursor.execute("""
@@ -1078,7 +1177,7 @@ def delete_estoque_item(
         conn.close()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado no seu estoque.")
 
-    codigo, produto = item[0], item[1]
+    codigo, produto = item["codigo"], item["produto"]
     cursor.execute("DELETE FROM estoque_produtos WHERE id = ? AND usuario_id = ?", (produto_id, current_user["id"]))
     cursor.execute("DELETE FROM estoque_movimentacoes WHERE produto_id = ? AND usuario_id = ?", (produto_id, current_user["id"]))
     conn.commit()
@@ -1096,10 +1195,13 @@ def movimentar_estoque(
     current_user: Dict[str, Any] = Depends(security.get_current_user),
 ):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     # Previne BOLA: valida se o produto pertence ao usuário logado
-    cursor.execute("SELECT * FROM estoque_produtos WHERE id = ? AND usuario_id = ?", (req.produto_id, current_user["id"]))
+    lock = " FOR UPDATE" if security.USE_POSTGRES else ""
+    cursor.execute(
+        "SELECT * FROM estoque_produtos WHERE id = ? AND usuario_id = ?" + lock,
+        (req.produto_id, current_user["id"]),
+    )
     item = cursor.fetchone()
     if not item:
         conn.close()
@@ -1165,10 +1267,13 @@ def incorporar_nfe(
     current_user: Dict[str, Any] = Depends(security.get_current_user),
 ):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     incorporados_contagem = 0
+
+    if security.USE_POSTGRES:
+        # Serialize imports for one account, including items not created yet.
+        cursor.execute("SELECT id FROM usuarios WHERE id = ? FOR UPDATE", (current_user["id"],))
 
     for item in req.produtos:
         codigo = str(item.get("codigo", "")).strip()
@@ -1183,7 +1288,8 @@ def incorporar_nfe(
             continue
 
         cursor.execute(
-            "SELECT * FROM estoque_produtos WHERE codigo = ? AND usuario_id = ?",
+            "SELECT * FROM estoque_produtos WHERE codigo = ? AND usuario_id = ?"
+            + (" FOR UPDATE" if security.USE_POSTGRES else ""),
             (codigo, current_user["id"]),
         )
         existente = cursor.fetchone()
@@ -1222,18 +1328,19 @@ def incorporar_nfe(
                 current_user["id"], current_user["nome"], agora
             ))
         else:
+            returning_id = " RETURNING id" if security.USE_POSTGRES else ""
             cursor.execute("""
                 INSERT INTO estoque_produtos (
                     codigo, produto, unidade, quantidade_atual, estoque_minimo,
                     custo_unitario, preco_venda, fornecedor_ultimo, categoria,
                     usuario_id, criado_em, atualizado_em
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            """ + returning_id, (
                 codigo, produto_nome, unidade, qtd_entrada, 5.0,
                 custo_unitario, preco_venda, fornecedor, "Geral",
                 current_user["id"], agora, agora
             ))
-            novo_id = cursor.lastrowid
+            novo_id = cursor.fetchone()["id"] if security.USE_POSTGRES else cursor.lastrowid
             cursor.execute("""
                 INSERT INTO estoque_movimentacoes (
                     produto_id, codigo, tipo, quantidade, quantidade_anterior, quantidade_nova,
@@ -1269,7 +1376,6 @@ def get_movimentacoes(
     current_user: Dict[str, Any] = Depends(security.get_current_user),
 ):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     query = """
@@ -1299,7 +1405,6 @@ def get_movimentacoes(
 @app.get("/api/relatorios/desempenho")
 def get_relatorio_desempenho(current_user: Dict[str, Any] = Depends(security.get_current_user)):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
     cursor.execute("""
@@ -1471,25 +1576,25 @@ def get_auditoria(
     current_user: Dict[str, Any] = Depends(security.get_current_user),
 ):
     conn = security.get_db_connection(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+    operador_busca = "ILIKE" if security.USE_POSTGRES else "LIKE"
 
     query = "SELECT * FROM trilha_auditoria WHERE usuario_id = ?"
     params = [current_user["id"]]
 
     if acao and acao != "TODAS":
-        query += " AND acao LIKE ?"
+        query += f" AND acao {operador_busca} ?"
         params.append(f"%{acao}%")
 
     if termo:
-        query += " AND (detalhes LIKE ? OR acao LIKE ?)"
+        query += f" AND (detalhes {operador_busca} ? OR acao {operador_busca} ?)"
         termo_p = f"%{termo}%"
         params.extend([termo_p, termo_p])
 
     # Contagem total
-    count_query = query.replace("SELECT *", "SELECT COUNT(*)")
+    count_query = query.replace("SELECT *", "SELECT COUNT(*) AS total")
     cursor.execute(count_query, tuple(params))
-    total = cursor.fetchone()[0]
+    total = cursor.fetchone()["total"]
 
     query += " ORDER BY id DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])

@@ -68,3 +68,15 @@ Se desejar editar o código em tempo real:
    - Filtros instantâneos por categoria de evento e exportação da trilha em formato CSV.
 6. **📁 Histórico de NF-e**:
    - Consulta e filtragem instantânea de todas as notas fiscais importadas pela sua conta.
+
+## Publicação com Supabase e Vercel
+
+A Vercel compila o frontend e serve o FastAPI a partir da raiz do repositório. O modo local continua usando SQLite quando `DATABASE_URL` está ausente. O aplicativo React usa as mesmas rotas de API nos dois ambientes.
+
+1. Aplique a migração de `supabase/migrations` ao projeto de Gestão de Produtos. O backend usa o esquema privado `gestao_produtos`. Contas, senhas com hash e XMLs ficam no banco, acessados pela API autenticada.
+2. Em **Connect → Transaction pooler** no Supabase, copie a conexão PostgreSQL do projeto. Na Vercel, adicione `DATABASE_URL` como variável sensível do backend com a senha da conexão preenchida.
+3. Adicione `SECRET_KEY` como variável sensível da Vercel com uma chave aleatória de pelo menos 32 bytes, por exemplo gerada com `openssl rand -hex 32`. Use a mesma chave em todos os deploys do mesmo ambiente para manter os tokens válidos.
+4. Importe o repositório na Vercel com a pasta raiz padrão. Use o framework FastAPI e Node 22.12+ ou 24. O arquivo `pyproject.toml` define a compilação do frontend e a entrada `server:app`.
+5. Em um deploy de teste, confirme o cadastro e login, o envio de NF-e, a precificação, as movimentações de estoque e a exportação dos relatórios antes de promover para produção.
+
+A migração cria a estrutura no Supabase. Se houver registros em `banco_notas.db` ou arquivos em `xmls_processados/`, guarde uma cópia e migre esses dados à parte. As contas e notas locais permanecem na instalação que as criou.

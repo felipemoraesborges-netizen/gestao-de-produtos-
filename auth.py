@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,8 @@ def _garantir_tabela_usuarios(db_path: str = DB_PATH) -> None:
 
 def inicializar_tabela_usuarios(db_path: str = DB_PATH) -> None:
     """Cria a tabela de usuários com índices apropriados se não existir."""
+    if security.USE_POSTGRES:
+        return
     conn = security.get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("""
@@ -85,25 +88,24 @@ def cadastrar_usuario(
     impostos_json = json.dumps(impostos_padrao)
 
     try:
-        conn = security.get_db_connection(db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO usuarios (
-                usuario, nome, email, senha_hash, salt, empresa, cargo,
-                markup_padrao, custo_adicional_padrao, impostos_padrao, criado_em, ultimo_login
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            usuario, nome, email, senha_hash, salt, empresa.strip()[:100], cargo.strip()[:100],
-            float(markup_padrao), float(custo_adicional_padrao), impostos_json, criado_em, None
-        ))
-        conn.commit()
-        conn.close()
+        with closing(security.get_db_connection(db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO usuarios (
+                    usuario, nome, email, senha_hash, salt, empresa, cargo,
+                    markup_padrao, custo_adicional_padrao, impostos_padrao, criado_em, ultimo_login
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                usuario, nome, email, senha_hash, salt, empresa.strip()[:100], cargo.strip()[:100],
+                float(markup_padrao), float(custo_adicional_padrao), impostos_json, criado_em, None
+            ))
+            conn.commit()
         return True, "Usuário cadastrado com sucesso!"
     except sqlite3.IntegrityError as e:
         erro_str = str(e).lower()
-        if "usuario" in erro_str:
+        if "usuarios_usuario_key" in erro_str or "usuarios.usuario" in erro_str:
             return False, "Nome de usuário já está em uso."
-        elif "email" in erro_str:
+        elif "usuarios_email_key" in erro_str or "usuarios.email" in erro_str:
             return False, "E-mail já cadastrado."
         return False, "Usuário ou e-mail já cadastrado no sistema."
     except Exception as e:
@@ -129,7 +131,6 @@ def autenticar_usuario(
         return False, MENSAGEM_ERRO_GENERICA
 
     conn = security.get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM usuarios WHERE lower(usuario) = ? OR lower(email) = ?
@@ -157,8 +158,11 @@ def autenticar_usuario(
                 "UPDATE usuarios SET senha_hash = ?, salt = ? WHERE id = ?",
                 (novo_hash, novo_salt, usuario_dict["id"]),
             )
-            conn.commit()
         except Exception as e:
+            conn.rollback()
+            conn.close()
+            conn = security.get_db_connection(db_path)
+            cursor = conn.cursor()
             print(f"[Segurança] Falha no upgrade de hash: {e}")
 
     # Atualiza data do último login
@@ -184,7 +188,6 @@ def obter_usuario_por_id(usuario_id: int, db_path: str = DB_PATH) -> Optional[Di
     """Recupera os dados cadastrais do usuário sem expor credenciais."""
     _garantir_tabela_usuarios(db_path)
     conn = security.get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,))
     linha = cursor.fetchone()
@@ -231,25 +234,24 @@ def atualizar_perfil(
     impostos_json = json.dumps(impostos_padrao)
 
     try:
-        conn = security.get_db_connection(db_path)
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE usuarios SET
-                nome = ?,
-                email = ?,
-                empresa = ?,
-                cargo = ?,
-                markup_padrao = ?,
-                custo_adicional_padrao = ?,
-                impostos_padrao = ?
-            WHERE id = ?
-        """, (
-            nome, email, empresa.strip(), cargo.strip(),
-            float(markup_padrao), float(custo_adicional_padrao),
-            impostos_json, usuario_id
-        ))
-        conn.commit()
-        conn.close()
+        with closing(security.get_db_connection(db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE usuarios SET
+                    nome = ?,
+                    email = ?,
+                    empresa = ?,
+                    cargo = ?,
+                    markup_padrao = ?,
+                    custo_adicional_padrao = ?,
+                    impostos_padrao = ?
+                WHERE id = ?
+            """, (
+                nome, email, empresa.strip(), cargo.strip(),
+                float(markup_padrao), float(custo_adicional_padrao),
+                impostos_json, usuario_id
+            ))
+            conn.commit()
         return True, "Perfil e preferências atualizados com sucesso!"
     except sqlite3.IntegrityError:
         return False, "O e-mail informado já está em uso por outro usuário."
@@ -274,7 +276,6 @@ def alterar_senha(
         return False, msg_senha
 
     conn = security.get_db_connection(db_path)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT senha_hash, salt FROM usuarios WHERE id = ?", (usuario_id,))
     linha = cursor.fetchone()

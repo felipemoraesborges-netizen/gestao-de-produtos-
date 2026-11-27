@@ -155,7 +155,47 @@ export async function changeUserPassword(passwordData) {
 // ==========================================
 // IMPORTAÇÃO NF-E & PRECIFICAÇÃO
 // ==========================================
+async function uploadXmlParts(files, selectedTaxes) {
+  const chunkSize = 3 * 1024 * 1024;
+  const batch = crypto.randomUUID();
+  const endpoint = `${API_BASE}/nfe/upload-parts/${batch}`;
+  const arquivos = [];
+
+  for (const [index, file] of Array.from(files).entries()) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error(`O arquivo ${file.name} excede o limite de 10 MB.`);
+    }
+    const partes = Math.ceil(file.size / chunkSize);
+    for (let part = 0; part < partes; part++) {
+      const res = await authFetch(`${endpoint}/${index}/${part}`, {
+        method: 'PUT',
+        body: file.slice(part * chunkSize, (part + 1) * chunkSize),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || 'Erro ao enviar uma parte do arquivo XML');
+      }
+    }
+    arquivos.push({ nome: file.name, partes });
+  }
+
+  const res = await authFetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ arquivos, impostos_selecionados: selectedTaxes }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Erro ao processar arquivos XML');
+  return data;
+}
+
 export async function uploadXmlFiles(files, userId, selectedTaxes) {
+  const onVercel = import.meta.env.VITE_VERCEL_DEPLOYMENT === "1";
+  const totalSize = Array.from(files).reduce((size, file) => size + file.size, 0);
+  if (onVercel && totalSize > 4 * 1024 * 1024) {
+    return uploadXmlParts(files, selectedTaxes);
+  }
+
   const formData = new FormData();
   for (const file of files) {
     formData.append('files', file);
@@ -166,6 +206,10 @@ export async function uploadXmlFiles(files, userId, selectedTaxes) {
     method: 'POST',
     body: formData,
   });
+  if (onVercel && res.status === 413
+      && !res.headers.get("content-type")?.includes("application/json")) {
+    return uploadXmlParts(files, selectedTaxes);
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Erro ao processar arquivos XML');
   return data;
@@ -339,3 +383,4 @@ export async function downloadAuditoriaCsv(userId, acao = 'TODAS', termo = '') {
   a.remove();
   window.URL.revokeObjectURL(downloadUrl);
 }
+
